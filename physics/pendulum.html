@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>にじゅうふりこ｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+  .cv-wrap canvas{max-width:100%;max-height:100%}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">🌀 にじゅうふりこ</div>
+  <div class="cv-wrap"><canvas id="gameCv" class="playcv"></canvas></div>
+  <div class="toolbar">
+    <button class="focusable" id="btnReset">🔄 やりなおす</button>
+    <button class="focusable on" id="btnTrail">🌈 きせき：ON</button>
+  </div>
+  <div class="sim-desc">2つの ふりこを つないだ「カオス」の せかい。さいしょが ほんの すこし ちがうだけで、まったく べつの うごきに なるよ。がめんを ひっぱって はなすと、そこから うごきだす！</div>
+</div>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  function cvPos(cv,e){const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)};}
+
+  const cv=$("#gameCv");const W=720,H=560;cv.width=W;cv.height=H;
+  function fitCanvas(){
+    const box=cv.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    cv.style.width=(W*scale)+"px"; cv.style.height=(H*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  const ctx=cv.getContext("2d");
+  const cx=W/2, cy=H*0.30, PX=150, L1=1,L2=1, m1=1,m2=1, g=9.8;
+  let s=[Math.PI*0.75,0,Math.PI*0.5,0]; // t1,w1,t2,w2
+  let trail=[], showTrail=true, dragging=false;
+  function deriv(a){const[t1,w1,t2,w2]=a;const d=t1-t2,sd=Math.sin(d),cd=Math.cos(d);
+    const den=(2*m1+m2-m2*Math.cos(2*t1-2*t2));
+    const a1=(-g*(2*m1+m2)*Math.sin(t1)-m2*g*Math.sin(t1-2*t2)-2*sd*m2*(w2*w2*L2+w1*w1*L1*cd))/(L1*den);
+    const a2=(2*sd*(w1*w1*L1*(m1+m2)+g*(m1+m2)*Math.cos(t1)+w2*w2*L2*m2*cd))/(L2*den);
+    return[w1,a1,w2,a2];}
+  function rk4(dt){const add=(A,B,h)=>A.map((v,i)=>v+B[i]*h);
+    const k1=deriv(s),k2=deriv(add(s,k1,dt/2)),k3=deriv(add(s,k2,dt/2)),k4=deriv(add(s,k3,dt));
+    s=s.map((v,i)=>v+dt/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));}
+  function pts(){const x1=cx+PX*Math.sin(s[0]),y1=cy+PX*Math.cos(s[0]);
+    return{x1,y1,x2:x1+PX*Math.sin(s[2]),y2:y1+PX*Math.cos(s[2])};}
+  function aim(px,py){s=[Math.atan2(px-cx,py-cy),0,Math.atan2(px-cx,py-cy),0];trail=[];}
+  cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);dragging=true;const p=cvPos(cv,e);aim(p.x,p.y);});
+  cv.addEventListener("pointermove",e=>{if(!dragging)return;e.preventDefault();const p=cvPos(cv,e);aim(p.x,p.y);});
+  cv.addEventListener("pointerup",()=>dragging=false);
+  cv.addEventListener("pointercancel",()=>dragging=false);
+  $("#btnReset").onclick=()=>{s=[Math.PI*0.75+(Math.random()-.5)*0.02,0,Math.PI*0.5,0];trail=[];};
+  const bt=$("#btnTrail");bt.onclick=()=>{showTrail=!showTrail;
+    bt.textContent="🌈 きせき："+(showTrail?"ON":"OFF");bt.classList.toggle("on",showTrail);trail=[];};
+  function frame(){
+    if(!dragging){for(let k=0;k<8;k++)rk4(1/60/8);s[1]*=0.9998;s[3]*=0.9998;}
+    const P=pts();
+    if(showTrail){trail.push([P.x2,P.y2]);if(trail.length>260)trail.shift();}
+    ctx.fillStyle="#0d1b3d";ctx.fillRect(0,0,W,H);
+    if(showTrail&&trail.length>1){ctx.lineCap="round";
+      for(let i=1;i<trail.length;i++){const a=i/trail.length;
+        ctx.strokeStyle=`hsla(${(i*2)%360},90%,62%,${a})`;ctx.lineWidth=3*a+0.6;
+        ctx.beginPath();ctx.moveTo(trail[i-1][0],trail[i-1][1]);ctx.lineTo(trail[i][0],trail[i][1]);ctx.stroke();}}
+    ctx.strokeStyle="#cfe4ff";ctx.lineWidth=4;ctx.lineCap="round";
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(P.x1,P.y1);ctx.lineTo(P.x2,P.y2);ctx.stroke();
+    ctx.fillStyle="#8fb7ff";ctx.beginPath();ctx.arc(cx,cy,6,0,7);ctx.fill();
+    ctx.fillStyle="#5aa9f5";ctx.beginPath();ctx.arc(P.x1,P.y1,14,0,7);ctx.fill();
+    ctx.fillStyle="#ff6b8a";ctx.beginPath();ctx.arc(P.x2,P.y2,14,0,7);ctx.fill();
+    if(dragging){ctx.fillStyle="#ffffffcc";ctx.textAlign="center";
+      ctx.font="800 20px 'M PLUS Rounded 1c',sans-serif";ctx.fillText("はなすと うごきだすよ！",W/2,H-22);}
+    requestAnimationFrame(frame);}
+  frame();
+})();
+</script>
+</body>
+</html>

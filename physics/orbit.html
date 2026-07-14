@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>わくせいの うごき｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+  .cv-wrap canvas{max-width:100%;max-height:100%}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">🪐 わくせいの うごき</div>
+  <div class="cv-wrap"><canvas id="gameCv" class="playcv"></canvas></div>
+  <div class="toolbar">
+    <button class="focusable" id="btnReset">🔄 やりなおす</button>
+    <button class="focusable" id="btnAdd">☄️ ふやす</button>
+    <button class="focusable on" id="btnTrail">✨ きせき：ON</button>
+  </div>
+  <div class="sim-desc">たいようの じゅうりょくで わくせいが まわるよ。「☄️ふやす」で ほしを ついか。がめんを ドラッグして はなすと、その ほうこうへ ほしを うちだせる（フリック）！</div>
+</div>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  function R(n){return Math.floor(Math.random()*n);}
+  function cvPos(cv,e){const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)};}
+
+  const cv=$("#gameCv");const W=720,H=560;cv.width=W;cv.height=H;
+  function fitCanvas(){
+    const box=cv.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    cv.style.width=(W*scale)+"px"; cv.style.height=(H*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  const ctx=cv.getContext("2d");
+  const cx=W/2, cy=H/2, G=1, soft=8;
+  let bodies,showTrail=true,aiming=false,ax=0,ay=0,bx=0,by=0;
+  const HUES=[45,200,330,120,265,15,180];
+  function star(){return{m:4000,x:0,y:0,vx:0,vy:0,fixed:true,hue:45,rad:16,tr:[]};}
+  function addPlanet(r,ang,speedMul,hue){
+    const px=r*Math.cos(ang),py=r*Math.sin(ang);
+    const vc=Math.sqrt(G*4000/r)*speedMul;
+    bodies.push({m:1+R(4),x:px,y:py,vx:-Math.sin(ang)*vc,vy:Math.cos(ang)*vc,
+      hue:hue,rad:5+R(4),tr:[]});}
+  function reset(){bodies=[star()];
+    [140,210,290,370].forEach((r,i)=>addPlanet(r,Math.random()*7,0.9+Math.random()*0.2,HUES[i%HUES.length]));}
+  function accel(){const a=bodies.map(()=>[0,0]);
+    for(let i=0;i<bodies.length;i++)for(let j=0;j<bodies.length;j++){if(i===j)continue;
+      const dx=bodies[j].x-bodies[i].x,dy=bodies[j].y-bodies[i].y;
+      const r2=dx*dx+dy*dy+soft*soft,inv=G*bodies[j].m/(r2*Math.sqrt(r2));
+      a[i][0]+=inv*dx;a[i][1]+=inv*dy;}
+    return a;}
+  function stepPhys(dt){let a=accel();
+    for(let i=0;i<bodies.length;i++){const b=bodies[i];if(b.fixed)continue;
+      b.vx+=a[i][0]*dt/2;b.vy+=a[i][1]*dt/2;b.x+=b.vx*dt;b.y+=b.vy*dt;}
+    a=accel();
+    for(let i=0;i<bodies.length;i++){const b=bodies[i];if(b.fixed)continue;
+      b.vx+=a[i][0]*dt/2;b.vy+=a[i][1]*dt/2;}
+    bodies=bodies.filter(b=>b.fixed||(b.x*b.x+b.y*b.y)<2400*2400);}
+  cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);aiming=true;
+    const p=cvPos(cv,e);ax=bx=p.x-cx;ay=by=p.y-cy;});
+  cv.addEventListener("pointermove",e=>{if(!aiming)return;e.preventDefault();
+    const p=cvPos(cv,e);bx=p.x-cx;by=p.y-cy;});
+  cv.addEventListener("pointerup",()=>{if(!aiming)return;aiming=false;
+    if(bodies.length<70)bodies.push({m:1+R(4),x:ax,y:ay,vx:(bx-ax)*0.05,vy:(by-ay)*0.05,
+      hue:HUES[R(HUES.length)],rad:5+R(4),tr:[]});});
+  cv.addEventListener("pointercancel",()=>aiming=false);
+  $("#btnReset").onclick=reset;
+  $("#btnAdd").onclick=()=>{if(bodies.length<70)
+    addPlanet(140+R(260),Math.random()*7,0.85+Math.random()*0.3,HUES[R(HUES.length)]);};
+  const bt=$("#btnTrail");bt.onclick=()=>{showTrail=!showTrail;
+    bt.textContent="✨ きせき："+(showTrail?"ON":"OFF");bt.classList.toggle("on",showTrail);
+    if(!showTrail)bodies.forEach(b=>b.tr=[]);};
+  reset();
+  function frame(){
+    if(!aiming)for(let k=0;k<2;k++)stepPhys(0.16);
+    ctx.fillStyle="#070b1e";ctx.fillRect(0,0,W,H);
+    for(let i=0;i<70;i++){ctx.fillStyle="#ffffff22";ctx.fillRect((i*137)%W,(i*97)%H,2,2);}
+    bodies.forEach(b=>{if(showTrail&&!b.fixed){b.tr.push([b.x,b.y]);if(b.tr.length>70)b.tr.shift();}
+      if(showTrail&&b.tr.length>1){ctx.lineCap="round";
+        for(let i=1;i<b.tr.length;i++){const a=i/b.tr.length;
+          ctx.strokeStyle=`hsla(${b.hue},85%,62%,${a*0.8})`;ctx.lineWidth=b.rad*0.5*a+0.4;
+          ctx.beginPath();ctx.moveTo(cx+b.tr[i-1][0],cy+b.tr[i-1][1]);
+          ctx.lineTo(cx+b.tr[i][0],cy+b.tr[i][1]);ctx.stroke();}}});
+    bodies.forEach(b=>{const X=cx+b.x,Y=cy+b.y;
+      if(b.fixed){const gr=ctx.createRadialGradient(X,Y,2,X,Y,b.rad*2.4);
+        gr.addColorStop(0,"#fff6c8");gr.addColorStop(.5,"#ffcc33");gr.addColorStop(1,"#ffcc3300");
+        ctx.fillStyle=gr;ctx.beginPath();ctx.arc(X,Y,b.rad*2.4,0,7);ctx.fill();
+        ctx.fillStyle="#fff2b0";ctx.beginPath();ctx.arc(X,Y,b.rad,0,7);ctx.fill();}
+      else{ctx.fillStyle=`hsl(${b.hue},85%,62%)`;ctx.beginPath();ctx.arc(X,Y,b.rad,0,7);ctx.fill();}});
+    if(aiming){ctx.strokeStyle="#ffffffcc";ctx.lineWidth=3;ctx.setLineDash([6,6]);
+      ctx.beginPath();ctx.moveTo(cx+ax,cy+ay);ctx.lineTo(cx+bx,cy+by);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(cx+ax,cy+ay,5,0,7);ctx.fill();}
+    ctx.fillStyle="#cfe0ff";ctx.font="800 18px 'M PLUS Rounded 1c',sans-serif";ctx.textAlign="left";
+    ctx.fillText("ほし: "+bodies.length,16,30);
+    requestAnimationFrame(frame);}
+  frame();
+})();
+</script>
+</body>
+</html>

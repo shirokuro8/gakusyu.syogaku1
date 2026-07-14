@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ぴょんぴょんロケット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b3d;touch-action:none;
+    overscroll-behavior:none;font-family:'M PLUS Rounded 1c',sans-serif;color:#fff;}
+  #screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;touch-action:none;}
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;
+    background:radial-gradient(ellipse at 50% 30%, rgba(74,25,66,.85), rgba(11,14,46,.96) 70%);
+    transition:opacity .3s ease, visibility .3s ease;}
+  .overlay.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .title{font-weight:800;font-size:32px;margin:0 0 10px;text-shadow:0 0 20px rgba(255,107,53,.5);}
+  .sub{font-size:15px;color:#b9beE8;font-weight:600;margin:0 0 22px;max-width:300px;line-height:1.6;}
+  .btn{font-family:inherit;font-weight:700;font-size:19px;color:#fff;
+    background:linear-gradient(135deg,#FF6B35,#FF3F8E);border:none;border-radius:999px;
+    padding:15px 42px;box-shadow:0 6px 0 #B8431F,0 8px 20px rgba(255,107,53,.35);cursor:pointer;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #B8431F;}
+  .hiscore{font-size:13px;color:#b9beE8;font-weight:600;margin-top:16px;min-height:16px;}
+  .final-score{font-size:44px;font-weight:800;color:#FFE66D;
+    text-shadow:0 0 16px rgba(255,230,109,.6);margin:6px 0 2px;}
+</style>
+</head>
+<body>
+
+<div id="screen"><canvas id="game" width="720" height="480"></canvas></div>
+
+<div id="start-screen" class="overlay">
+  <div style="font-size:60px;margin-bottom:10px;">🚀</div>
+  <h1 class="title">ぴょんぴょんロケット</h1>
+  <p class="sub">タップ／スペース／決定 で ジャンプ！<br>⭐の あいだを すりぬけて すすもう。</p>
+  <button class="btn" id="start-btn">あそぶ</button>
+  <div class="hiscore" id="start-hiscore"></div>
+</div>
+
+<div id="gameover-screen" class="overlay hidden">
+  <p class="sub" style="margin-bottom:0;font-weight:800;color:#fff;">スコア</p>
+  <div class="final-score" id="final-score">0</div>
+  <button class="btn" id="retry-btn">もういちど あそぶ</button>
+  <div class="hiscore" id="end-hiscore"></div>
+</div>
+
+<script>
+(function(){
+  const cv=document.getElementById('game');
+  const ctx=cv.getContext('2d');
+  const W=720,H=480;
+
+  function fitCanvas(){
+    const box=document.getElementById('screen').getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    cv.style.width=(W*scale)+'px'; cv.style.height=(H*scale)+'px';
+  }
+  window.addEventListener('resize',fitCanvas); fitCanvas();
+
+  function R(n){return Math.floor(Math.random()*n);}
+
+  // ---------- 効果音 ----------
+  let AC=null;
+  function beep(f,d=.12,type="sine"){
+    try{
+      AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+      const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+      g.gain.setValueAtTime(.15,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+      o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);
+    }catch(e){}
+  }
+  const sOK=()=>{beep(880,.1);setTimeout(()=>beep(1320,.15),90)};
+  const sNG=()=>beep(180,.3,"square");
+
+  // ---------- ハイスコア（このブラウザに保存） ----------
+  const HS_KEY='pyonpyon-rocket-highscore';
+  let highScore=0;
+  try{ highScore=parseInt(localStorage.getItem(HS_KEY),10)||0; }catch(e){}
+  function saveHighScore(){ try{ localStorage.setItem(HS_KEY,String(highScore)); }catch(e){} }
+  function renderHiScores(){
+    const t=highScore>0?`さいこうきろく: ${highScore}`:'';
+    document.getElementById('start-hiscore').textContent=t;
+    document.getElementById('end-hiscore').textContent=t;
+  }
+  renderHiScores();
+
+  // ── 親ウィンドウ（べんきょうクエスト本体）へ「本当のゲームオーバー」を通知 ──
+  // ゲームチケットのライフ制（1まいで3回まで）は親側で管理する
+  function notifyParentGameOver(){
+    try{
+      if(window.parent && window.parent!==window){
+        window.parent.postMessage({type:'BQ_GAME_OVER',game:'pyonpyon-rocket'},'*');
+      }
+    }catch(e){}
+  }
+
+  // ---------- ゲーム本体 ----------
+  let rocket={y:H/2,vy:0},gates=[],score=0,alive=false,started=false,frame=0;
+  let lives=3,sessionOver=false,deadHandled=true;
+  const stars=Array.from({length:40},()=>({x:R(W),y:R(H),r:Math.random()*1.6+.4,s:Math.random()*.6+.2}));
+
+  function reset(){ rocket={y:H/2,vy:0};gates=[];score=0;frame=0;alive=true;deadHandled=false; }
+
+  function startGame(){
+    lives=3;sessionOver=false;
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    reset();started=true;
+  }
+
+  function endSession(){
+    document.getElementById('final-score').textContent=score;
+    const isBest=score>highScore;
+    if(isBest){ highScore=score; saveHighScore(); }
+    renderHiScores();
+    document.getElementById('gameover-screen').classList.remove('hidden');
+    notifyParentGameOver();
+  }
+
+  function flap(){
+    if(sessionOver || !started)return;
+    if(!alive){ reset(); return; }
+    rocket.vy=-6.2; beep(660,.06);
+  }
+  cv.addEventListener('pointerdown',flap);
+  window.addEventListener('keydown',e=>{
+    if(e.key===' '||e.key==='Enter'){ e.preventDefault(); flap(); }
+  });
+  document.getElementById('start-btn').addEventListener('click',startGame);
+  document.getElementById('retry-btn').addEventListener('click',startGame);
+
+  function step(){
+    ctx.fillStyle="#0d1b3d";ctx.fillRect(0,0,W,H);
+    stars.forEach(s=>{ s.x-=s.s; if(s.x<0)s.x=W; ctx.fillStyle="#ffffffaa";
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fill(); });
+
+    if(started && alive){
+      frame++; rocket.vy+=.32; rocket.y+=rocket.vy;
+      if(frame%95===0){ const gap=150,gy=R(H-gap-120)+60; gates.push({x:W+30,gy,gap,passed:false}); }
+      gates.forEach(g=>{ g.x-=3.1;
+        if(!g.passed && g.x<120){ g.passed=true; score++; sOK(); }
+        if(Math.abs(g.x-120)<34 && (rocket.y<g.gy || rocket.y>g.gy+g.gap)) alive=false;
+      });
+      gates=gates.filter(g=>g.x>-60);
+      if(rocket.y<10 || rocket.y>H-10) alive=false;
+      if(!alive && !deadHandled){
+        deadHandled=true; lives--; sNG();
+        if(lives<=0){ sessionOver=true; setTimeout(endSession,300); }
+      }
+    }
+
+    gates.forEach(g=>{
+      ctx.font="34px serif";ctx.textAlign="center";
+      for(let y=20;y<g.gy-10;y+=46)ctx.fillText("⭐",g.x,y);
+      for(let y=g.gy+g.gap+30;y<H;y+=46)ctx.fillText("⭐",g.x,y);
+    });
+
+    if(started){
+      ctx.font="42px serif";ctx.textAlign="center";
+      ctx.save();ctx.translate(120,rocket.y);ctx.rotate(Math.min(.6,Math.max(-.6,rocket.vy*.06)));
+      ctx.fillText("🚀",0,14);ctx.restore();
+
+      ctx.fillStyle="#fff";ctx.font="800 30px 'M PLUS Rounded 1c',sans-serif";
+      ctx.textAlign="left";ctx.fillText("スコア "+score,18,42);
+      ctx.textAlign="right";ctx.fillText("ベスト "+highScore,W-18,42);
+      ctx.textAlign="center";ctx.font="800 26px 'M PLUS Rounded 1c',sans-serif";
+      ctx.fillText("❤️".repeat(Math.max(0,lives))||"　",W/2,42);
+
+      if(!alive && !sessionOver){
+        ctx.font="800 22px 'M PLUS Rounded 1c',sans-serif";
+        ctx.fillText("タップで つづける（のこり ❤️"+lives+"）",W/2,H/2+24);
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+  step();
+})();
+</script>
+</body>
+</html>

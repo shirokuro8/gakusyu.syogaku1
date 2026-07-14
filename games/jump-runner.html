@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ジャンプランナー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b3d;touch-action:none;
+    overscroll-behavior:none;font-family:'M PLUS Rounded 1c',sans-serif;color:#fff;}
+  #screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;touch-action:none;}
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;
+    background:radial-gradient(ellipse at 50% 30%, rgba(35,50,25,.85), rgba(11,14,46,.96) 70%);
+    transition:opacity .3s ease, visibility .3s ease;}
+  .overlay.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .title{font-weight:800;font-size:32px;margin:0 0 10px;text-shadow:0 0 20px rgba(92,138,58,.6);}
+  .sub{font-size:15px;color:#b9beE8;font-weight:600;margin:0 0 22px;max-width:300px;line-height:1.6;}
+  .btn{font-family:inherit;font-weight:700;font-size:19px;color:#fff;
+    background:linear-gradient(135deg,#5c8a3a,#3aa64a);border:none;border-radius:999px;
+    padding:15px 42px;box-shadow:0 6px 0 #1f7030,0 8px 20px rgba(58,166,74,.35);cursor:pointer;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #1f7030;}
+  .hiscore{font-size:13px;color:#b9beE8;font-weight:600;margin-top:16px;min-height:16px;}
+  .final-score{font-size:44px;font-weight:800;color:#FFE66D;
+    text-shadow:0 0 16px rgba(255,230,109,.6);margin:6px 0 2px;}
+</style>
+</head>
+<body>
+
+<div id="screen"><canvas id="game" width="760" height="320"></canvas></div>
+
+<div id="start-screen" class="overlay">
+  <div style="font-size:60px;margin-bottom:10px;">🦖</div>
+  <h1 class="title">ジャンプランナー</h1>
+  <p class="sub">タップ／スペース／決定 で ジャンプ！<br>しょうがいぶつを こえて すすもう。</p>
+  <button class="btn" id="start-btn">あそぶ</button>
+  <div class="hiscore" id="start-hiscore"></div>
+</div>
+
+<div id="gameover-screen" class="overlay hidden">
+  <p class="sub" style="margin-bottom:0;font-weight:800;color:#fff;">スコア</p>
+  <div class="final-score" id="final-score">0</div>
+  <button class="btn" id="retry-btn">もういちど あそぶ</button>
+  <div class="hiscore" id="end-hiscore"></div>
+</div>
+
+<script>
+(function(){
+  const cv=document.getElementById('game');
+  const ctx=cv.getContext('2d');
+  const W=760,H=320;
+
+  function fitCanvas(){
+    const box=document.getElementById('screen').getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    cv.style.width=(W*scale)+'px'; cv.style.height=(H*scale)+'px';
+  }
+  window.addEventListener('resize',fitCanvas); fitCanvas();
+
+  function R(n){return Math.floor(Math.random()*n);}
+  function pick(a){return a[R(a.length)];}
+
+  // ---------- 効果音 ----------
+  let AC=null;
+  function beep(f,d=.12,type="sine"){
+    try{
+      AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+      const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+      g.gain.setValueAtTime(.15,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+      o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);
+    }catch(e){}
+  }
+  const sOK=()=>{beep(880,.1);setTimeout(()=>beep(1320,.15),90)};
+  const sNG=()=>beep(180,.3,"square");
+
+  // ---------- ハイスコア（このブラウザに保存） ----------
+  const HS_KEY='jump-runner-highscore';
+  let best=0;
+  try{ best=parseInt(localStorage.getItem(HS_KEY),10)||0; }catch(e){}
+  function saveHighScore(){ try{ localStorage.setItem(HS_KEY,String(best)); }catch(e){} }
+  function renderHiScores(){
+    const t=best>0?`さいこうきろく: ${best}`:'';
+    document.getElementById('start-hiscore').textContent=t;
+    document.getElementById('end-hiscore').textContent=t;
+  }
+  renderHiScores();
+
+  // ── 親ウィンドウ（べんきょうクエスト本体）へ「本当のゲームオーバー」を通知 ──
+  // ゲームチケットのライフ制（1まいで3回まで）は親側で管理する
+  function notifyParentGameOver(){
+    try{
+      if(window.parent && window.parent!==window){
+        window.parent.postMessage({type:'BQ_GAME_OVER',game:'jump-runner'},'*');
+      }
+    }catch(e){}
+  }
+
+  // ---------- ゲーム本体 ----------
+  const GROUND=H-64, GRAV=0.9, JUMP=-15;
+  const OB=["🌵","👾","🪨","🌵","🐛","🧨","🌵"];
+  let hero,obs,holes,platforms,clouds,score,spd,alive=false,started=false,frame,nextGap,nextHoleGap,nextPlatGap;
+  let lives=3,sessionOver=false,deadHandled=true;
+
+  function reset(){
+    hero={x:120,y:GROUND,vy:0,onGround:true}; obs=[]; holes=[]; platforms=[];
+    clouds=Array.from({length:4},()=>({x:R(W),y:26+R(80),s:.15+Math.random()*.35}));
+    score=0; spd=5; alive=true; frame=0; nextGap=50; nextHoleGap=150+R(120); nextPlatGap=280+R(160); deadHandled=false;
+  }
+
+  function startGame(){
+    lives=3;sessionOver=false;
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    reset();started=true;
+  }
+
+  function endSession(){
+    document.getElementById('final-score').textContent=score;
+    renderHiScores();
+    document.getElementById('gameover-screen').classList.remove('hidden');
+    notifyParentGameOver();
+  }
+
+  function jump(){
+    if(sessionOver || !started)return;
+    if(!alive){ reset(); return; }
+    if(hero.onGround){ hero.vy=JUMP; hero.onGround=false; beep(720,.07); }
+  }
+  cv.addEventListener('pointerdown',jump);
+  window.addEventListener('keydown',e=>{
+    if(e.key===' '||e.key==='Enter'){ e.preventDefault(); jump(); }
+  });
+  document.getElementById('start-btn').addEventListener('click',startGame);
+  document.getElementById('retry-btn').addEventListener('click',startGame);
+
+  function step(){
+    const grad=ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,"#0d1b3d");grad.addColorStop(1,"#243a7a");
+    ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+    ctx.font="34px serif";ctx.textAlign="left";
+    (clouds||[]).forEach(c=>{
+      c.x-=c.s*(started&&alive?2:.6); if(c.x<-40)c.x=W+40;
+      ctx.globalAlpha=.5;ctx.fillText("☁️",c.x,c.y);ctx.globalAlpha=1;
+    });
+    ctx.fillStyle="#375a2a";ctx.fillRect(0,GROUND+22,W,H-GROUND-22);
+    ctx.strokeStyle="#5c8a3a";ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(0,GROUND+24);ctx.lineTo(W,GROUND+24);ctx.stroke();
+    (holes||[]).forEach(h=>{ ctx.fillStyle=grad; ctx.fillRect(h.x,GROUND+20,h.w,H-GROUND-20); });
+    (platforms||[]).forEach(p=>{
+      ctx.fillStyle="#5c8a3a";ctx.fillRect(p.x,p.y,p.w,10);
+      ctx.fillStyle="#274a1a";ctx.fillRect(p.x,p.y+10,p.w,6);
+    });
+
+    if(started && alive){
+      frame++;
+      const prevY=hero.y;
+      hero.vy+=GRAV; hero.y+=hero.vy;
+      let landed=false;
+      for(const p of platforms){
+        if(hero.x>p.x && hero.x<p.x+p.w && hero.vy>=0 && prevY<=p.y && hero.y>=p.y){
+          hero.y=p.y; hero.vy=0; hero.onGround=true; landed=true; break;
+        }
+      }
+      if(!landed){
+        const overHole=holes.some(h=>hero.x>h.x && hero.x<h.x+h.w);
+        if(hero.y>=GROUND && !overHole){ hero.y=GROUND; hero.vy=0; hero.onGround=true; }
+        else{ hero.onGround=false; if(hero.y>H+40) alive=false; }   // 穴に おちたら ゲームオーバー
+      }
+      if(frame>=nextGap){
+        obs.push({x:W+40,em:pick(OB),passed:false});
+        nextGap=frame+Math.max(28,70-Math.floor(score/5))-R(12);   // すすむほど 少しずつ敵が増える
+      }
+      if(frame>=nextHoleGap){
+        holes.push({x:W+40,w:46+R(40)});
+        nextHoleGap=frame+150+R(170);
+      }
+      if(frame>=nextPlatGap){
+        platforms.push({x:W+40,w:90+R(70),y:GROUND-(60+R(50))});
+        nextPlatGap=frame+280+R(220);
+      }
+      if(frame%6===0)score++;
+      obs.forEach(o=>{
+        o.x-=spd;
+        if(!o.passed && o.x<hero.x-24){ o.passed=true; score+=5; sOK(); }
+        if(Math.abs(o.x-hero.x)<28 && Math.abs(GROUND-hero.y)<30) alive=false;
+      });
+      obs=obs.filter(o=>o.x>-50);
+      holes.forEach(h=>h.x-=spd);
+      holes=holes.filter(h=>h.x>-120);
+      platforms.forEach(p=>p.x-=spd);
+      platforms=platforms.filter(p=>p.x>-200);
+      if(!alive && !deadHandled){
+        deadHandled=true; lives--; sNG();
+        if(score>best){ best=score; saveHighScore(); }
+        if(lives<=0){ sessionOver=true; setTimeout(endSession,300); }
+      }
+    }
+
+    if(hero){
+      ctx.font="40px serif";ctx.textAlign="center";ctx.textBaseline="middle";
+      obs.forEach(o=>ctx.fillText(o.em,o.x,GROUND-4));
+      ctx.font="44px serif";
+      ctx.save();
+      ctx.translate(hero.x,hero.y-8);
+      ctx.scale(-1,1);          // 恐竜アイコンを 左右反転（進行方向を向かせる）
+      ctx.fillText("🦖",0,0);
+      ctx.restore();
+      ctx.textBaseline="alphabetic";
+    }
+
+    if(started){
+      ctx.fillStyle="#fff";ctx.font="800 26px 'M PLUS Rounded 1c',sans-serif";
+      ctx.textAlign="left";ctx.fillText("スコア "+(score||0),16,38);
+      ctx.textAlign="right";ctx.fillText("ベスト "+best,W-16,38);
+      ctx.textAlign="center";ctx.font="800 22px 'M PLUS Rounded 1c',sans-serif";
+      ctx.fillText("❤️".repeat(Math.max(0,lives))||"　",W/2,38);
+
+      if(!alive && !sessionOver){
+        ctx.font="800 20px 'M PLUS Rounded 1c',sans-serif";
+        ctx.fillText("タップで つづける（のこり ❤️"+lives+"）",W/2,H/2+20);
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+  step();
+})();
+</script>
+</body>
+</html>
