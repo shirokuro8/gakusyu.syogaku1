@@ -77,11 +77,12 @@ const GRADES=[
 ];
 const Q_PER_STAGE=10;
 /* ゲーム（それぞれ games/ フォルダの別HTMLをiframeで開く） */
+/* cost: 1回あそぶのに ひつような ゲームチケットの まいすう（省略時は1） */
 const EXTRA_GAMES=[
- {title:"ぴょんぴょんロケット", emoji:"🚀", src:"games/pyonpyon-rocket.html"},
- {title:"ジャンプランナー", emoji:"🦖", src:"games/jump-runner.html"},
- {title:"きらきらロケット", emoji:"🚀", src:"games/kirakira-rocket.html"},
- {title:"JUMP HERO", emoji:"🦸", src:"games/jump-hero-6.html"},
+ {title:"ぴょんぴょんロケット", emoji:"🚀", src:"games/pyonpyon-rocket.html", cost:1},
+ {title:"ジャンプランナー", emoji:"🦖", src:"games/jump-runner.html", cost:1},
+ {title:"きらきらロケット", emoji:"🚀", src:"games/kirakira-rocket.html", cost:3},
+ {title:"JUMP HERO", emoji:"🦸", src:"games/jump-hero-6.html", cost:3},
 ];
 /* ================= 保存（localStorage） ================= */
 const KEY="bq2_data";
@@ -365,12 +366,12 @@ function renderGames(){
   const extras=EXTRA_GAMES.map((g,i)=>`
     <button class="stage fun focusable" data-act="extgame" data-i="${i}">
       <span class="em">${g.emoji}</span><span class="nm">${g.title}</span>
-      <div class="st">🎟️1まい</div></button>`).join("");
+      <div class="st">🎟️${g.cost||1}まい</div></button>`).join("");
   app.innerHTML=`
   <button class="back focusable" data-act="home">← もどる</button>
   <div class="pagetitle">🎮 ゲームひろば</div>
   <div class="tk-box" style="text-align:center">🎟️ ゲームチケット ${DB.tickets||0}まい
-    <small>チケット1まいで ${TICKET_LIVES}回まで あそべるよ（クイズで あつめよう）</small></div>
+    <small>チケットを つかうと ${TICKET_LIVES}回まで あそべるよ（ゲームによって ひつような まいすうが ちがうよ）</small></div>
   <div class="grid">
     ${extras}
   </div>
@@ -378,20 +379,21 @@ function renderGames(){
 }
 /* ── 外部ゲーム(iframe): チケット1まい=ゲームオーバー3回まで ── */
 function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
-  if((DB.tickets||0)<1){                 // チケットが なければ 遊べない
+  const cost=g.cost||1;
+  if((DB.tickets||0)<cost){              // チケットが たりなければ 遊べない
     const m=document.createElement("div");m.className="modal";
     m.innerHTML=`
     <div class="noticket">
       <div style="font-size:3rem">🎟️❌</div>
-      <h2 style="margin:.3rem 0">チケットが ないよ</h2>
-      <div style="font-weight:800;margin:.6rem 0 1rem">クイズで 新記ろくを だすと<br>ゲームチケットが もらえるよ！</div>
+      <h2 style="margin:.3rem 0">チケットが ${cost}まい ひつようだよ</h2>
+      <div style="font-weight:800;margin:.6rem 0 1rem">いま ${DB.tickets||0}まい もっているよ。<br>クイズで 新記ろくを だすと<br>ゲームチケットが もらえるよ！</div>
       <button class="bigbtn focusable noticket-close">🎮 とじる</button>
     </div>`;
     m.querySelector(".noticket-close").onclick=()=>m.remove();
     document.body.appendChild(m);
     return;
   }
-  DB.tickets--;save();                   // チケットを1まい消費（開始時に消費）
+  DB.tickets-=cost;save();               // チケットを cost まい消費（開始時に消費）
   let lives=TICKET_LIVES;
   const m=document.createElement("div");m.className="modal";
   m.innerHTML=`

@@ -128,7 +128,7 @@
 <div id="start-screen" class="overlay">
   <div class="rocket-emblem">🚀</div>
   <h1 class="title">きらきらロケット</h1>
-  <p class="subtitle">ゆびでロケットをうごかして<br>りゅうせいをよけて、UFOをやっつけよう！</p>
+  <p class="subtitle">ゆびでロケットをうごかして<br>りゅうせいをよけて、UFOをやっつけよう！<br>UFOは ねらってくるから ちゅうい！</p>
   <div class="powerup-legend">
     <div class="legend-item"><div class="legend-icon" style="--c:#FFE66D;">⚡</div>れんしゃ</div>
     <div class="legend-item"><div class="legend-icon" style="--c:#4ECDC4;">🔱</div>ワイド</div>
@@ -216,6 +216,12 @@
   let activeBuff = null;   // {type, icon, color, until, total}
   let shieldActive = false;
 
+  // ---------- difficulty curve ----------
+  const TOUGH_METEOR_LEVEL = 5;       // このレベルから かたい いんせきが とうじょう
+  const BATTLESHIP_LEVEL = 10;        // このレベルから せんかんが とうじょう
+  const UFO_FIRE_LEAD_MS = 380;       // UFOが うつ よび予告(チャージ)の じかん
+  const BATTLESHIP_FIRE_LEAD_MS = 550;// せんかんが うつ よび予告(チャージ)の じかん
+
   const rocketHitR = 14;
   const rocket = { x:0, y:0, tx:0, ty:0, trail:[] };
 
@@ -253,12 +259,14 @@
   function spawnEnemy(now){
     const x = rand(36, W-36);
     let type, r, vy, hp, points;
-    if(level>30 && Math.random()<0.10){
+    // せんかんの出現率はレベル10で低めに解禁し、じわじわ上限まで上げる
+    const shipChance = level>=BATTLESHIP_LEVEL ? Math.min(0.06 + (level-BATTLESHIP_LEVEL)*0.005, 0.16) : 0;
+    if(shipChance>0 && Math.random()<shipChance){
       type='battleship'; r=26; vy=rand(22,34); hp=4; points=60;
     } else if(Math.random() < 0.3){
       type='ufo'; r=18; vy=rand(50,80)+level*9; hp=1; points=20;
     } else {
-      const tough = level>10 && Math.random()<0.35;
+      const tough = level>=TOUGH_METEOR_LEVEL && Math.random()<0.35;
       type = tough ? 'meteor_tough' : 'meteor';
       r = tough ? 26 : 22;
       vy = rand(50,80) + level*9;
@@ -268,11 +276,31 @@
     const e = {
       type, x, y:-50, baseX:x, vy, r, hp, maxHp:hp, points,
       rot: rand(0,Math.PI*2), rotSpeed: rand(-1,1), phase: rand(0,Math.PI*2),
-      hitFlashUntil: 0
+      hitFlashUntil: 0, charging: false
     };
-    if(type==='ufo' && level>20){ e.nextFireAt = now + rand(900,1800); }
-    if(type==='battleship'){ e.nextFireAt = now + rand(1800,3000); }
+    if(type==='ufo'){
+      // 画面を通り抜けるまでに かならず1回はうつように、寿命に応じて初弾を早める
+      const lifeMs = (H + e.r + 90) / e.vy * 1000;
+      e.nextFireAt = now + Math.min(rand(500,1200), lifeMs*0.45);
+    }
+    if(type==='battleship'){ e.nextFireAt = now + rand(1600,2400); }
     enemies.push(e);
+  }
+
+  function fireAimedBullet(e, speed, color, r){
+    // その瞬間の プレイヤーの方向へ まっすぐ ねらいうち
+    const dx = rocket.x - e.x, dy = rocket.y - (e.y+e.r*0.3);
+    const d = Math.max(1, Math.hypot(dx,dy));
+    enemyBullets.push({ x:e.x, y:e.y+e.r*0.3, vx:dx/d*speed, vy:dy/d*speed, color, r });
+  }
+
+  function fireRadialBurst(e, count, speed, color, r){
+    // ぜんほうい(360°)に均等に ばらまく
+    const offset = rand(0, Math.PI*2/count);
+    for(let i=0;i<count;i++){
+      const a = (i/count)*Math.PI*2 + offset;
+      enemyBullets.push({ x:e.x, y:e.y, vx:Math.cos(a)*speed, vy:Math.sin(a)*speed, color, r });
+    }
   }
 
   function spawnCollectible(){
@@ -384,6 +412,8 @@
     document.getElementById('gameover-screen').classList.add('hidden');
     document.getElementById('hud').classList.add('show');
     state = 'playing';
+    // UFOはレベル1から ねらいうちしてくるので、はじめに一度 注意をうながす
+    setTimeout(()=>{ if(state==='playing') showToast('⚠️ UFOが ねらってくるぞ！'); }, 1000);
   }
 
   function endGame(){
@@ -433,9 +463,9 @@
     if(level>lastLevelShown){
       lastLevelShown = level;
       let msg = '⭐ レベル ' + level + ' ⭐';
-      if(level===11) msg = '⚠️ かたい いんせきが とうじょう！';
-      else if(level===21) msg = '⚠️ UFOが こうげきしてくる！';
-      else if(level===31) msg = '⚠️ せんかんが とうじょう！';
+      if(level===TOUGH_METEOR_LEVEL) msg = '⚠️ かたい いんせきが とうじょう！';
+      else if(level===BATTLESHIP_LEVEL) msg = '⚠️ せんかんが とうじょう！ぜんほうい こうげきに ちゅうい！';
+      else if(level===15) msg = '⚠️ UFOのこうげきが はげしくなってきた！';
       showToast(msg);
     }
 
@@ -456,18 +486,23 @@
       e.rot += e.rotSpeed*dt;
       if(e.type==='ufo'){
         e.phase += dt*2.2; e.x = e.baseX + Math.sin(e.phase)*46;
+        e.charging = e.nextFireAt!=null && (e.nextFireAt-now) > 0 && (e.nextFireAt-now) < UFO_FIRE_LEAD_MS;
         if(e.nextFireAt && now > e.nextFireAt){
-          enemyBullets.push({ x:e.x, y:e.y+14, vy: e.vy + rand(90,130), color:'#FF4D8D', r:5 });
-          e.nextFireAt = now + rand(1300,2400);
+          fireAimedBullet(e, Math.min(230+level*4, 420), '#FF4D8D', 5);
+          burst(e.x, e.y+e.r*0.3, '#FF4D8D', 6);
+          // レベルが上がるほど 連射間隔が短くなる(=こうげき頻度アップ)
+          const interval = Math.max(950, 4200 - level*170);
+          e.nextFireAt = now + rand(interval*0.75, interval*1.25);
+          e.charging = false;
         }
       } else if(e.type==='battleship'){
         e.x = e.baseX + Math.sin(now/900 + e.phase)*14;
+        e.charging = e.nextFireAt!=null && (e.nextFireAt-now) > 0 && (e.nextFireAt-now) < BATTLESHIP_FIRE_LEAD_MS;
         if(e.nextFireAt && now > e.nextFireAt){
-          const off = e.r*0.32;
-          const bvy = e.vy + rand(90,130);
-          enemyBullets.push({ x:e.x-off, y:e.y+e.r*0.3, vy: bvy, color:'#FF8C42', r:6 });
-          enemyBullets.push({ x:e.x+off, y:e.y+e.r*0.3, vy: bvy, color:'#FF8C42', r:6 });
-          e.nextFireAt = now + rand(2800,4200);
+          fireRadialBurst(e, 12, Math.min(150+level*1.5, 260), '#FF8C42', 6);
+          burst(e.x, e.y, '#FF8C42', 16);
+          e.nextFireAt = now + rand(2600,3800);
+          e.charging = false;
         }
       }
     });
@@ -510,9 +545,9 @@
       return true;
     });
 
-    enemyBullets.forEach(b=> b.y += b.vy*dt);
+    enemyBullets.forEach(b=>{ b.x += (b.vx||0)*dt; b.y += b.vy*dt; });
     enemyBullets = enemyBullets.filter(b=>{
-      if(b.y > H+30) return false;
+      if(b.y > H+30 || b.y < -30 || b.x < -30 || b.x > W+30) return false;
       if(now > invincibleUntil && dist2(rocket.x,rocket.y,b.x,b.y) < (rocketHitR+8)*(rocketHitR+8)){
         if(shieldActive){
           shieldActive = false;
@@ -677,6 +712,18 @@
     ctx.translate(e.x,e.y);
     const r = e.r;
 
+    if(e.charging){
+      // ぜんほうい こうげきの まえぶれ：オレンジのリングが 外側にひろがりながら 点滅
+      const t = 1 - Math.max(0,(e.nextFireAt-now))/BATTLESHIP_FIRE_LEAD_MS;
+      const pulse = 0.5 + 0.5*Math.sin(now/50);
+      ctx.save();
+      ctx.shadowColor = '#FF8C42'; ctx.shadowBlur = 14+8*pulse;
+      ctx.strokeStyle = `rgba(255,140,66,${0.45+0.4*pulse})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0,0, r*1.3+r*0.9*t, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
     // engine glow (trailing behind, away from player)
     const glow = 5 + Math.sin(now/130)*2;
     ctx.save();
@@ -762,7 +809,7 @@
   }
 
   function drawEnemy(e, now){
-    if(e.type==='ufo') drawUfo(e);
+    if(e.type==='ufo') drawUfo(e, now);
     else if(e.type==='battleship') drawBattleship(e, now);
     else drawMeteor(e);
     if(now < e.hitFlashUntil){
@@ -774,9 +821,19 @@
     drawHpPips(e);
   }
 
-  function drawUfo(e){
+  function drawUfo(e, now){
     ctx.save();
     ctx.translate(e.x,e.y);
+    if(e.charging){
+      // うつ直前、ねらいをつけているサイン(赤いリングが点滅)
+      const pulse = 0.5 + 0.5*Math.sin(now/45);
+      ctx.save();
+      ctx.shadowColor = '#FF4D8D'; ctx.shadowBlur = 10+6*pulse;
+      ctx.strokeStyle = `rgba(255,77,141,${0.55+0.35*pulse})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.ellipse(0,4,e.r+3+2*pulse,e.r*0.45+3+2*pulse,0,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
     ctx.fillStyle = '#4ECDC4';
     ctx.beginPath();
     ctx.ellipse(0,4,e.r,e.r*0.45,0,0,Math.PI*2);
