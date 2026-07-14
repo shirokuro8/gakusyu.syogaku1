@@ -32,8 +32,9 @@
   <div class="toolbar">
     <button class="focusable" id="btnClear">🧹 きれいに</button>
     <button class="focusable" id="btnBurst">💥 ばくはつ</button>
+    <button class="focusable" id="btnVortex">🌀 うずをみる</button>
   </div>
-  <div class="sim-desc">ひだりから みぎへ、かぜが ずっと ふいているよ。がめんを ゆびで タップ・ドラッグすると「まる いし」を おける！ おいた ばしょで ながれが まがったり、うずを まいたり するのを かんさつしよう。「⚪おおきさ」で いしの おおきさ、「💨かぜ」で つよさを かえられるよ。</div>
+  <div class="sim-desc">ひだりから みぎへ、かぜが ずっと ふいているよ。がめんを ゆびで タップ・ドラッグすると「まる いし」を おける！ おいた ばしょで ながれが まがったり、うずを まいたり するのを かんさつしよう。「⚪おおきさ」で いしの おおきさ、「💨かぜ」で つよさを かえられるよ。「🌀うずをみる」を おすと、いしの うしろに かわりばんこに できる うずの れつが、あかと あおの もようで はっきり みえるよ。じつは これ、はしや えんとつの うしろに ほんとうに できる ゆうめいな なみもようなんだ。</div>
 </div>
 <script>
 (function(){
@@ -67,6 +68,8 @@
   const dt=0.14;
   const WIND_SCALE=0.08;                 // スライダー値(1-6)を、この解像度の格子で自然に見える流速に変換する
   let windSpeed=3.5*WIND_SCALE,obRpx=30,obPx=W*0.4,obPy=H*0.5,obstacleOn=true,dragOb=false,tick=0;
+  let vortexMode=false;
+  const VORT_SCALE=14;   // うずのいろの こさを きめる係数（カルマン渦の可視化）
 
   function set_bnd(b,x){for(let i=1;i<=N;i++){
       if(b===1){x[IX(0,i)]=windSpeed;x[IX(N+1,i)]=x[IX(N,i)];}
@@ -144,6 +147,8 @@
   $("#sizeR").oninput=e=>{obRpx=+e.target.value;};
   $("#btnClear").onclick=()=>{dR.fill(0);dG.fill(0);dB.fill(0);u.fill(0);v.fill(0);};
   $("#btnBurst").onclick=burst;
+  const btnVortex=$("#btnVortex");
+  btnVortex.onclick=()=>{vortexMode=!vortexMode;btnVortex.classList.toggle("on",vortexMode);};
 
   function frame(){
     tick++;
@@ -161,14 +166,28 @@
     const decay=0.992;
     for(let k=0;k<size;k++){dR[k]*=decay;dG[k]*=decay;dB[k]*=decay;}
 
-    const px=img.data,SAT=1.35;
-    for(let j=0;j<N+2;j++)for(let i=0;i<N+2;i++){
-      const o=(j*(N+2)+i)*4;
-      const nr=Math.min(1,dR[IX(i,j)]/SAT),ng=Math.min(1,dG[IX(i,j)]/SAT),nb=Math.min(1,dB[IX(i,j)]/SAT);
-      const inten=Math.max(nr,ng,nb);
-      if(inten<0.02){px[o+3]=0;continue;}
-      px[o]=Math.round(nr*255);px[o+1]=Math.round(ng*255);px[o+2]=Math.round(nb*255);
-      px[o+3]=Math.min(255,inten*255*2.2);}
+    const px=img.data;
+    if(vortexMode){
+      /* ===== うずの いろ分け（カルマン渦の可視化）：まわりの流速のねじれ(渦度)を 赤・青で描く ===== */
+      for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){
+        const o=(j*(N+2)+i)*4;
+        if(solid[IX(i,j)]){px[o]=90;px[o+1]=90;px[o+2]=105;px[o+3]=255;continue;}
+        const vort=(v[IX(i+1,j)]-v[IX(i-1,j)])-(u[IX(i,j+1)]-u[IX(i,j-1)]);
+        const s=clamp(vort*VORT_SCALE,-1,1);
+        if(s>=0){px[o]=255*s+10*(1-s);px[o+1]=30*(1-s)+10*s;px[o+2]=40*(1-s)+10*s;}
+        else{const t=-s;px[o]=10*(1-t)+10*t;px[o+1]=30*(1-t)+70*t;px[o+2]=10*(1-t)+255*t;}
+        px[o+3]=255;
+      }
+    }else{
+      const SAT=1.35;
+      for(let j=0;j<N+2;j++)for(let i=0;i<N+2;i++){
+        const o=(j*(N+2)+i)*4;
+        const nr=Math.min(1,dR[IX(i,j)]/SAT),ng=Math.min(1,dG[IX(i,j)]/SAT),nb=Math.min(1,dB[IX(i,j)]/SAT);
+        const inten=Math.max(nr,ng,nb);
+        if(inten<0.02){px[o+3]=0;continue;}
+        px[o]=Math.round(nr*255);px[o+1]=Math.round(ng*255);px[o+2]=Math.round(nb*255);
+        px[o+3]=Math.min(255,inten*255*2.2);}
+    }
     octx.putImageData(img,0,0);
     ctx.fillStyle="#0a1230";ctx.fillRect(0,0,W,H);
     ctx.drawImage(off,1,1,N,N,0,0,W,H);

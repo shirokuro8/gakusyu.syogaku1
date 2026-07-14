@@ -26,7 +26,7 @@
     <button class="focusable on" id="btnSense">👁️ かんちはんい：ON</button>
     <button class="focusable" id="btnReset">🔄 やりなおす</button>
   </div>
-  <div class="sim-desc">かんとうとう（まんなかで しじする ひと）は いないよ！ 1000にんが それぞれ すぐ近くの「ごきんじょ」だけを見て、ぶつからないように 自分で よけながら すすんでいるよ。まんなかの いしを ドラッグして うごかすと、みんなが 自然に みちを かえる ようすが 見られるよ。「👁️」ボタンで、1人が どこまで 見えているか（かんちはんい）を たしかめよう。</div>
+  <div class="sim-desc">かんとうとう（まんなかで しじする ひと）は いないよ！ 1000にんが それぞれ すぐ近くの「ごきんじょ」だけを見て、ぶつからないように 自分で よけながら すすんでいるよ。まんなかの いしを ドラッグして うごかすと、みんなが 自然に みちを かえる ようすが 見られるよ。「👁️」ボタンで、1人が どこまで 見えているか（かんちはんい）を たしかめよう。むこうがわに とうちゃくした ひとは そこで たびが おしまい。あたらしい ひとは でてこないから、すすむにつれて がめんは すこしずつ すいていくよ。1000にん ぜんいん とうちゃくしたら クリアだよ！</div>
 </div>
 <script>
 (function(){
@@ -58,7 +58,7 @@
     {edge:"bottom",color:"#7be07f"},
   ];
   let obX=W/2,obY=H/2,obR=42,dragOb=false;
-  let agents=[],arrived=0,showSense=true;
+  let agents=[],arrived=0,showSense=true,finished=false;
 
   function spawnPos(edge){
     const j=18+Math.random()*(H-36),k=18+Math.random()*(W-36);
@@ -75,32 +75,33 @@
   }
   function makeAgent(gi){
     const g=GROUPS[gi],p=spawnPos(g.edge);
-    return{x:p.x,y:p.y,vx:0,vy:0,gi,goal:goalFor(g.edge,p.x,p.y)};
-  }
-  function respawn(a){
-    const g=GROUPS[a.gi],p=spawnPos(g.edge);
-    a.x=p.x;a.y=p.y;a.vx=0;a.vy=0;a.goal=goalFor(g.edge,p.x,p.y);
+    return{x:p.x,y:p.y,vx:0,vy:0,gi,goal:goalFor(g.edge,p.x,p.y),done:false};
   }
   function resetAll(){
     agents=[];
     for(let gi=0;gi<GROUPS.length;gi++)for(let k=0;k<PER_GROUP;k++)agents.push(makeAgent(gi));
     arrived=0;
+    finished=false;
   }
 
-  /* ── 空間ハッシュ：各エージェントは自分のまわり(3x3セル)しか見ない＝中央管制なしの近傍探索 ── */
+  /* ── 空間ハッシュ：各エージェントは自分のまわり(3x3セル)しか見ない＝中央管制なしの近傍探索 ──
+     とうちゃく済み(done)の ひとは グリッドにも のせない＝もう うごかない・かんちされない */
   function buildGrid(){
     const grid=new Map();
     for(let idx=0;idx<agents.length;idx++){
       const a=agents[idx];
+      if(a.done)continue;
       const key=((a.x/SENS)|0)+","+((a.y/SENS)|0);
       let arr=grid.get(key);if(!arr){arr=[];grid.set(key,arr);}arr.push(idx);
     }
     return grid;
   }
   function step(dt){
+    if(finished)return;
     const grid=buildGrid();
     for(let idx=0;idx<agents.length;idx++){
       const a=agents[idx];
+      if(a.done)continue;
       const gx=a.goal.x-a.x,gy=a.goal.y-a.y,gd=Math.hypot(gx,gy)||1;
       let fx=((gx/gd)*MAXSPD-a.vx)*STEER_K, fy=((gy/gd)*MAXSPD-a.vy)*STEER_K;
       const cx=(a.x/SENS)|0,cy=(a.y/SENS)|0;
@@ -121,7 +122,7 @@
       const sp=Math.hypot(a.vx,a.vy),cap=MAXSPD*1.5;
       if(sp>cap){a.vx=a.vx/sp*cap;a.vy=a.vy/sp*cap;}
       a.x+=a.vx*dt;a.y+=a.vy*dt;
-      if(gd<12){arrived++;respawn(a);}
+      if(gd<12){a.done=true;a.vx=0;a.vy=0;arrived++;if(arrived>=agents.length)finished=true;}
     }
   }
 
@@ -137,19 +138,33 @@
 
   function render(){
     ctx.fillStyle="rgba(13,27,61,0.38)";ctx.fillRect(0,0,W,H);
-    if(showSense&&agents.length){
-      let best=agents[0],bd=1e9;
-      for(const a of agents){const d=(a.x-obX)*(a.x-obX)+(a.y-obY)*(a.y-obY);if(d<bd){bd=d;best=a;}}
-      ctx.beginPath();ctx.arc(best.x,best.y,SENS,0,7);
-      ctx.fillStyle="#ffffff22";ctx.fill();ctx.strokeStyle="#ffffffaa";ctx.lineWidth=1.5;ctx.stroke();
+    if(showSense){
+      let best=null,bd=1e9;
+      for(const a of agents){
+        if(a.done)continue;
+        const d=(a.x-obX)*(a.x-obX)+(a.y-obY)*(a.y-obY);if(d<bd){bd=d;best=a;}
+      }
+      if(best){
+        ctx.beginPath();ctx.arc(best.x,best.y,SENS,0,7);
+        ctx.fillStyle="#ffffff22";ctx.fill();ctx.strokeStyle="#ffffffaa";ctx.lineWidth=1.5;ctx.stroke();
+      }
     }
-    for(const a of agents){ctx.fillStyle=GROUPS[a.gi].color;ctx.fillRect(a.x-1.7,a.y-1.7,3.4,3.4);}
+    for(const a of agents){if(a.done)continue;ctx.fillStyle=GROUPS[a.gi].color;ctx.fillRect(a.x-1.7,a.y-1.7,3.4,3.4);}
     const grd=ctx.createRadialGradient(obX-obR*0.3,obY-obR*0.3,obR*0.1,obX,obY,obR);
     grd.addColorStop(0,"#f6e9c8");grd.addColorStop(.7,"#caa968");grd.addColorStop(1,"#8a6b3d");
     ctx.fillStyle=grd;ctx.beginPath();ctx.arc(obX,obY,obR,0,7);ctx.fill();
     ctx.strokeStyle="#ffffffaa";ctx.lineWidth=2;ctx.stroke();
     ctx.fillStyle="#cfe0ff";ctx.font="800 16px 'M PLUS Rounded 1c',sans-serif";ctx.textAlign="left";
-    ctx.fillText("とうちゃく: "+arrived+"にん　／　にんずう: "+agents.length,14,26);
+    ctx.fillText("とうちゃく: "+arrived+"にん　／　ぜんぶで: "+agents.length+"にん",14,26);
+    if(finished){
+      ctx.fillStyle="rgba(13,27,61,0.72)";ctx.fillRect(0,0,W,H);
+      ctx.textAlign="center";
+      ctx.fillStyle="#ffe38a";ctx.font="800 28px 'M PLUS Rounded 1c',sans-serif";
+      ctx.fillText("🎉 1000にん ぜんいん とうちゃく！",W/2,H/2-12);
+      ctx.fillStyle="#cfe0ff";ctx.font="800 15px 'M PLUS Rounded 1c',sans-serif";
+      ctx.fillText("「🔄 やりなおす」で もういちど あそべるよ",W/2,H/2+22);
+      ctx.textAlign="left";
+    }
   }
   resetAll();
   let last=performance.now();

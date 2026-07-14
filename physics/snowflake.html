@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ゆきの けっしょう｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
+  .cv-wrap canvas{max-width:100%;max-height:100%}
+  .hud{position:absolute;top:.6rem;left:.6rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.35rem .9rem;font-weight:800;font-size:.8rem;pointer-events:none}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+  .sliderline{display:flex;align-items:center;gap:.5rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.5rem 1rem;font-weight:800;font-size:.85rem;flex:1;min-width:9.5rem}
+  .sliderline input[type=range]{flex:1;accent-color:var(--theme)}
+  select.focusable{background:var(--card);border-radius:99px;box-shadow:var(--shadow);
+    border:3px solid transparent;padding:.55rem .9rem;font:inherit;font-weight:800;font-size:.85rem;
+    color:inherit;flex:1;min-width:9.5rem}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">❄️ ゆきの けっしょう</div>
+  <div class="cv-wrap">
+    <canvas id="view" class="playcv"></canvas>
+    <div class="hud" id="hud">つぶ: 0　／　おおきさ: 0</div>
+  </div>
+  <div class="toolbar">
+    <select class="focusable" id="symSel">
+      <option value="1">たいしょう なし（き の えだ）</option>
+      <option value="4">4つに たいしょう</option>
+      <option value="6" selected>6つに たいしょう（ゆき）</option>
+      <option value="8">8つに たいしょう</option>
+    </select>
+    <select class="focusable" id="paletteSel">
+      <option value="ice" selected>こおりいろ</option>
+      <option value="fire">ほのおいろ</option>
+      <option value="aurora">オーロラいろ</option>
+      <option value="mono">しろくろ</option>
+    </select>
+  </div>
+  <div class="toolbar">
+    <label class="sliderline"><span>🧲 くっつきやすさ</span><input type="range" class="focusable" id="stickR" min="5" max="100" step="1" value="35"></label>
+    <label class="sliderline"><span>⏩ そだつ はやさ</span><input type="range" class="focusable" id="speedR" min="1" max="12" step="1" value="5"></label>
+  </div>
+  <div class="toolbar">
+    <button class="focusable on" id="btnPlay">⏸️ いちじていし</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
+  </div>
+  <div class="sim-desc">まんなかの ちいさな つぶ から、けっしょうが そだつよ。まわりを たくさんの つぶ が ふらふら さまよっていて、けっしょうに ぶつかると その ばしょに ペタッと くっつくよ。それが なんかいも つづくと、しぜんに き の えだ の ような かたち に なっていくよ。「🧲くっつきやすさ」を ひくく すると ほそながく、たかく すると まるくて つまった かたち に なるよ。「たいしょう」を えらぶと、ほんものの ゆき の けっしょう みたいな きれいな かたち が できるよ。</div>
+</div>
+<script>
+(function(){
+  const N=520;
+  const cx=Math.floor(N/2), cy=Math.floor(N/2);
+
+  const view=document.getElementById('view');
+  view.width=N; view.height=N;
+  function fitCanvas(){
+    const box=view.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/N, box.height/N);
+    view.style.width=(N*scale)+"px"; view.style.height=(N*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  const ctx=view.getContext('2d');
+
+  const bg=document.createElement('canvas');
+  bg.width=N; bg.height=N;
+  const bctx=bg.getContext('2d');
+
+  let grid, walkers, stuckCount, maxRadius, frameCount, paused, finished;
+  const POOL_SIZE=360;
+
+  const symSel=document.getElementById('symSel');
+  const stickR=document.getElementById('stickR');
+  const speedR=document.getElementById('speedR');
+  const paletteSel=document.getElementById('paletteSel');
+  const btnPlay=document.getElementById('btnPlay');
+  const btnReset=document.getElementById('btnReset');
+  const hud=document.getElementById('hud');
+
+  function stickiness(){ return (+stickR.value)/100; }
+  function stepsPerFrame(){ return +speedR.value; }
+  function symmetry(){ return +symSel.value; }
+  function mirrorOn(){ return symmetry()>1; }
+
+  symSel.addEventListener('change', reset);
+  btnPlay.addEventListener('click', ()=>{
+    paused=!paused;
+    btnPlay.textContent = paused ? '▶️ さいかい' : '⏸️ いちじていし';
+    btnPlay.classList.toggle('on', !paused);
+  });
+  btnReset.addEventListener('click', reset);
+
+  const palettes={
+    ice:   [[20,30,70],[60,120,190],[140,220,255],[255,255,255]],
+    fire:  [[40,0,10],[170,30,20],[250,140,20],[255,235,150]],
+    aurora:[[10,10,40],[80,30,140],[40,180,140],[220,255,240]],
+    mono:  [[40,40,40],[120,120,120],[200,200,200],[255,255,255]]
+  };
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function getColor(frac){
+    const pal=palettes[paletteSel.value]||palettes.ice;
+    const seg=1/(pal.length-1);
+    let i=Math.min(pal.length-2, Math.floor(frac/seg));
+    let t=(frac-i*seg)/seg;
+    const c0=pal[i], c1=pal[i+1];
+    return `rgb(${lerp(c0[0],c1[0],t)|0},${lerp(c0[1],c1[1],t)|0},${lerp(c0[2],c1[2],t)|0})`;
+  }
+
+  const DIRS=[];
+  for(let dx=-1; dx<=1; dx++) for(let dy=-1; dy<=1; dy++) if(dx||dy) DIRS.push([dx,dy]);
+
+  function inBounds(x,y){ return x>=1 && y>=1 && x<N-1 && y<N-1; }
+  function idx(x,y){ return y*N+x; }
+  function occupied(x,y){ return inBounds(x,y) && grid[idx(x,y)]===1; }
+  function maxRadiusAllowed(){ return N/2-4; }
+  function drawPixel(gx,gy,color){ bctx.fillStyle=color; bctx.fillRect(gx,gy,1,1); }
+
+  function stickWithSymmetry(dx,dy,color){
+    const sym=symmetry(), mir=mirrorOn();
+    for(let i=0;i<sym;i++){
+      const ang=i*2*Math.PI/sym, cosA=Math.cos(ang), sinA=Math.sin(ang);
+      placeOne(dx*cosA-dy*sinA, dx*sinA+dy*cosA, color);
+      if(mir){
+        const mdy=-dy;
+        placeOne(dx*cosA-mdy*sinA, dx*sinA+mdy*cosA, color);
+      }
+    }
+  }
+  function placeOne(rx,ry,color){
+    const gx=Math.round(cx+rx), gy=Math.round(cy+ry);
+    if(!inBounds(gx,gy)) return;
+    const id=idx(gx,gy);
+    if(grid[id]===1) return;
+    grid[id]=1; drawPixel(gx,gy,color);
+  }
+
+  function spawnWalker(w){
+    const r=Math.min(maxRadius+14, maxRadiusAllowed());
+    const ang=Math.random()*Math.PI*2;
+    w.x=Math.round(cx+r*Math.cos(ang)); w.y=Math.round(cy+r*Math.sin(ang)); w.alive=true;
+  }
+  function killRadius(){ return Math.min(maxRadius+40, maxRadiusAllowed()+2); }
+
+  function reset(){
+    grid=new Uint8Array(N*N);
+    stuckCount=0; maxRadius=0; frameCount=0; finished=false; paused=false;
+    btnPlay.textContent='⏸️ いちじていし'; btnPlay.classList.add('on');
+
+    bctx.fillStyle='#000'; bctx.fillRect(0,0,N,N);
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,N,N);
+    grid[idx(cx,cy)]=1; drawPixel(cx,cy,getColor(0)); stuckCount=1;
+
+    walkers=[];
+    for(let i=0;i<POOL_SIZE;i++){ const w={x:0,y:0,alive:true}; spawnWalker(w); walkers.push(w); }
+    updateHUD();
+  }
+
+  function updateHUD(){
+    hud.textContent=`つぶ: ${stuckCount}　／　おおきさ: ${maxRadius|0}px`;
+  }
+
+  function stepWalker(w){
+    if(finished) return;
+    const dx0=w.x-cx, dy0=w.y-cy, distSq=dx0*dx0+dy0*dy0, kr=killRadius();
+    if(distSq>kr*kr || !inBounds(w.x,w.y)){ spawnWalker(w); return; }
+
+    let touching=false;
+    for(let k=0;k<DIRS.length;k++){
+      const nx=w.x+DIRS[k][0], ny=w.y+DIRS[k][1];
+      if(occupied(nx,ny)){ touching=true; break; }
+    }
+    if(touching){
+      if(Math.random()<stickiness()){
+        const dx=w.x-cx, dy=w.y-cy, r=Math.sqrt(dx*dx+dy*dy);
+        if(r>maxRadius) maxRadius=r;
+        const frac=Math.min(1, maxRadius/maxRadiusAllowed());
+        stickWithSymmetry(dx,dy,getColor(frac));
+        stuckCount++;
+        spawnWalker(w);
+        if(maxRadius>=maxRadiusAllowed()) finished=true;
+        return;
+      }
+    }
+    const d=DIRS[(Math.random()*DIRS.length)|0];
+    const nx=w.x+d[0], ny=w.y+d[1];
+    if(!occupied(nx,ny) && inBounds(nx,ny)){ w.x=nx; w.y=ny; }
+  }
+
+  function frame(){
+    if(!paused && !finished){
+      const steps=stepsPerFrame();
+      for(let s=0;s<steps;s++) for(let i=0;i<walkers.length;i++) stepWalker(walkers[i]);
+      frameCount++;
+    }
+    ctx.drawImage(bg,0,0);
+    if(!finished && !paused){
+      ctx.fillStyle='rgba(200,225,255,0.55)';
+      for(let i=0;i<walkers.length;i++) ctx.fillRect(walkers[i].x, walkers[i].y, 1, 1);
+    }
+    if(frameCount%6===0) updateHUD();
+    requestAnimationFrame(frame);
+  }
+
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

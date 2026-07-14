@@ -78,8 +78,14 @@
     [220.00,246.94,261.63,293.66,329.63,392.00], // Aマイナー系（しっとり）
     [349.23,392.00,440.00,523.25,587.33,659.25], // Fペンタトニック（たかめ）
   ];
-  const xStart=90,xFullEnd=630,yTop=110,yBottom=470,MAXBEND=70;
-  let lengthMul=1,scaleIdx=0;
+  /* がめんの はば(W=720px)に かならず おさまるように、げんの ながさは
+     「みじかい ときの みぎはし(xMinEnd)」〜「ながい ときの みぎはし(xFullEnd)」の
+     あいだを スライダーの わりあいで うめる（スライダーの min/max から じどうで けいさん）。
+     これで「ながい・ひくい」に しても がめんを はみださない。 */
+  const lenR=$("#lenR");
+  const LEN_MIN=+lenR.min,LEN_MAX=+lenR.max;
+  const xStart=90,xMinEnd=250,xFullEnd=660,yTop=110,yBottom=470,MAXBEND=70;
+  let lengthMul=+lenR.value,scaleIdx=0;
   const strings=[0,1,2,3,4,5].map(i=>({
     y:yTop+i*((yBottom-yTop)/5), baseFreq:SCALES[0][i], hue:Math.round(8+i*54),
     amp:0,t0:0,decay:0,freq:0,vibrating:false,
@@ -94,7 +100,10 @@
   }
 
   const dragMap=new Map();
-  function xEndNow(){return xStart+(xFullEnd-xStart)*lengthMul;}
+  function xEndNow(){
+    const t=clamp((lengthMul-LEN_MIN)/(LEN_MAX-LEN_MIN),0,1);
+    return xMinEnd+(xFullEnd-xMinEnd)*t;
+  }
   cv.addEventListener("pointerdown",e=>{
     ensureAudio();
     const p=cvPos(cv,e);const xe=xEndNow();
@@ -121,7 +130,7 @@
   }
   cv.addEventListener("pointerup",release);
   cv.addEventListener("pointercancel",release);
-  $("#lenR").oninput=e=>{lengthMul=+e.target.value;};
+  lenR.oninput=e=>{lengthMul=+e.target.value;};
   $("#btnScale").onclick=()=>{scaleIdx=(scaleIdx+1)%SCALES.length;applyScale();};
 
   function drawString(s,now){
