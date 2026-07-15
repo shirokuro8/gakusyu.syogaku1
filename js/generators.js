@@ -20,7 +20,11 @@ function numWrongs(ans,spread=3){const s=new Set();let g=0;
 function kanjiRead(pool){const[k,y]=pick(pool);
   return mk(`この かんじの よみかたは？`,y,shuffle([...new Set(pool.map(p=>p[1]))].filter(r=>r!==y)).slice(0,3),k);}
 function kanjiWrite(pool){const[k,y]=pick(pool);
-  return mk(`「${y}」を かんじで かくと？`,k,shuffle(pool.filter(p=>p[0]!==k)).slice(0,3).map(p=>p[0]));}
+  // 誤答は「読みが違う」語から選ぶ（同じ読みの別の字＝もう一つの正解を誤答にしてしまう事故を防ぐ）
+  return mk(`「${y}」を かんじで かくと？`,k,shuffle(pool.filter(p=>p[1]!==y)).slice(0,3).map(p=>p[0]));}
+/* 「かん字 よみ／かき」用：熟語プールと単漢字プールから 前半5問=熟語・後半5問=単漢字 で出題する */
+function kanjiReadMix(kanjiPool,jukugoPool,idx){return kanjiRead(idx<5?jukugoPool:kanjiPool);}
+function kanjiWriteMix(kanjiPool,jukugoPool,idx){return kanjiWrite(idx<5?jukugoPool:kanjiPool);}
 function emojiWord(pool,label){const[e,w]=pick(pool);
   return mk(`この えを ${label}で かくと？`,w,shuffle(pool.filter(p=>p[1]!==w)).slice(0,3).map(p=>p[1]),e);}
 function opposite(){const[a,b]=pick(OPPO);const[q,ans]=R(2)?[a,b]:[b,a];
@@ -174,3 +178,7 @@ function g4frac(){const d=pick([3,4,5,6]),whole=R(2)+1,rem=R(d-1)+1,imp=whole*d+
     [`${whole+1}と${d}ぶんの${rem}`,`${whole}と${d}ぶんの${(rem%(d-1))+1}`,`${whole-1>0?whole-1:whole+2}と${d}ぶんの${rem}`]);
   return mk(`${whole}と${d}ぶんの${rem} を 仮分数に すると？`,`${d}ぶんの${imp}`,
     [`${d}ぶんの${imp+1}`,`${d}ぶんの${imp-1}`,`${d}ぶんの${whole+rem}`]);}
+/* ── 特別枠：偉人・名言（学年に関係なく出題） ── */
+function ijinPerson(pool){const it=pick(pool);
+  const q=`${it.era}\n・${it.c[0]}\n・${it.c[1]}\n・${it.c[2]}\nこの{人|ひと}は だれ？`;
+  return mk(q,it.name,shuffle(pool.filter(p=>p.name!==it.name)).slice(0,3).map(p=>p.name));}
