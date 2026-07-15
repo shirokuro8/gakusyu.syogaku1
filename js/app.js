@@ -508,6 +508,11 @@ const PHYSICS_SIMS=[
  {title:"じゅうたいの ふしぎ", emoji:"🚗", tag:"なみ", src:"physics/traffic.html"},
  {title:"ありの えさはこび", emoji:"🐜", tag:"フェロモン", src:"physics/ant.html"},
  {title:"ゆきの けっしょう", emoji:"❄️", tag:"せいちょう", src:"physics/snowflake.html"},
+ {title:"みずめんの はもん", emoji:"💧", tag:"かんしょう", src:"physics/interference.html"},
+ {title:"おとが つくる もよう", emoji:"🔔", tag:"きょうめい", src:"physics/chladni.html"},
+ {title:"きの そだちかた", emoji:"🌿", tag:"ぶんき", src:"physics/lsystem.html"},
+ {title:"むげんに つづく もよう", emoji:"🔮", tag:"フラクタル", src:"physics/fractal.html"},
+ {title:"つなみと じめんの かたち", emoji:"🌊", tag:"あさせ", src:"physics/shallowwater.html"},
 ];
 function renderPhysics(){
   const items=PHYSICS_SIMS.map((p,i)=>`

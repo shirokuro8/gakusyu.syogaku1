@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>むげんに つづく もよう｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
+  .cv-wrap canvas{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow);image-rendering:pixelated}
+  .hud{position:absolute;top:.6rem;left:.6rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.35rem .9rem;font-weight:800;font-size:.78rem;pointer-events:none}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">🔮 むげんに つづく もよう</div>
+  <div class="cv-wrap">
+    <canvas id="view" class="playcv"></canvas>
+    <div class="hud" id="hud"></div>
+  </div>
+  <div class="toolbar">
+    <button class="focusable on" id="tabM">🔮 マンデルブロ</button>
+    <button class="focusable" id="tabJ">🌀 ジュリア</button>
+  </div>
+  <div class="toolbar">
+    <button class="focusable" id="btnZoomIn">🔍➕ ズームイン</button>
+    <button class="focusable" id="btnZoomOut">🔍➖ ズームアウト</button>
+  </div>
+  <div class="toolbar">
+    <button class="focusable" id="btnBack">↩️ ひとつ もどる</button>
+    <button class="focusable" id="btnReset">🔄 はじめから</button>
+  </div>
+  <div class="sim-desc" id="desc"></div>
+</div>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const view=$("#view"), ctx=view.getContext("2d");
+  const N=190; view.width=N; view.height=N;
+  function fitCanvas(){
+    const box=view.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/N, box.height/N);
+    view.style.width=(N*scale)+"px"; view.style.height=(N*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  function cvPos(e){const r=view.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(N/r.width), y:(e.clientY-r.top)*(N/r.height)};}
+
+  const img=ctx.createImageData(N,N);
+  const hud=$("#hud"), desc=$("#desc");
+  const tabM=$("#tabM"), tabJ=$("#tabJ"), btnBack=$("#btnBack"), btnReset=$("#btnReset");
+  const btnZoomIn=$("#btnZoomIn"), btnZoomOut=$("#btnZoomOut");
+
+  function hsl2rgb(h,s,l){h/=360;const f=(n)=>{const k=(n+h*12)%12;const a=s*Math.min(l,1-l);
+    return l-a*Math.max(-1,Math.min(k-3,9-k,1));};
+    return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];}
+  const palette=[];
+  for(let i=0;i<256;i++) palette.push(hsl2rgb((i*2.5)%360,0.75,0.5));
+
+  let mode="mandel";
+  let cx0=-0.5, cy0=0, scale0=2.6, history=[];
+  let juliaC={x:-0.4,y:0.6}, juliaScale=2.6;
+
+  function renderMandel(){
+    const maxIter=110;
+    const px=img.data;
+    let p=0;
+    for(let j=0;j<N;j++){
+      const y0=cy0+(j-N/2)/N*scale0;
+      for(let i=0;i<N;i++){
+        const x0=cx0+(i-N/2)/N*scale0;
+        let x=0,y=0,it=0;
+        while(x*x+y*y<=4 && it<maxIter){ const xt=x*x-y*y+x0; y=2*x*y+y0; x=xt; it++; }
+        if(it>=maxIter){ px[p]=8;px[p+1]=10;px[p+2]=20;px[p+3]=255; }
+        else{ const c=palette[it*4%256]; px[p]=c[0];px[p+1]=c[1];px[p+2]=c[2];px[p+3]=255; }
+        p+=4;
+      }
+    }
+    ctx.putImageData(img,0,0);
+    hud.textContent=`ズーム: x${(2.6/scale0).toFixed(1)}`;
+  }
+
+  function renderJulia(){
+    const maxIter=60;
+    const scale=juliaScale;
+    const px=img.data;
+    let p=0;
+    for(let j=0;j<N;j++){
+      const y0=(j-N/2)/N*scale;
+      for(let i=0;i<N;i++){
+        let x=(i-N/2)/N*scale, y=y0, it=0;
+        while(x*x+y*y<=4 && it<maxIter){ const xt=x*x-y*y+juliaC.x; y=2*x*y+juliaC.y; x=xt; it++; }
+        if(it>=maxIter){ px[p]=8;px[p+1]=10;px[p+2]=20;px[p+3]=255; }
+        else{ const c=palette[it*5%256]; px[p]=c[0];px[p+1]=c[1];px[p+2]=c[2];px[p+3]=255; }
+        p+=4;
+      }
+    }
+    ctx.putImageData(img,0,0);
+    hud.textContent=`c = ${juliaC.x.toFixed(2)} + ${juliaC.y.toFixed(2)}i ｜ ズーム: x${(2.6/juliaScale).toFixed(1)}`;
+  }
+
+  function render(){ mode==="mandel" ? renderMandel() : renderJulia(); }
+
+  function setMode(m){
+    mode=m;
+    tabM.classList.toggle("on",m==="mandel");
+    tabJ.classList.toggle("on",m==="julia");
+    btnBack.style.display = m==="mandel" ? "" : "none";
+    desc.textContent = m==="mandel"
+      ? "がめんを タップすると、その ばしょを どんどん ズーム して いくよ。「🔍➕ズームイン」「🔍➖ズームアウト」は おしつづけると、ずっと ズーム しつづけるよ。マンデルブロしゅうごう は、どんなに ちいさく ズーム しても、にた ような ふしぎな もよう が つぎつぎ でてくる「むげんの もよう」なんだ。「↩️ひとつもどる」で 前の おおきさに もどれるよ。"
+      : "がめんを ゆびで なぞる(ドラッグする)と、その ばしょ に あわせて もよう が まるで いきもの みたいに ぐにゃぐにゃ かたち を かえるよ。「🔍➕ズームイン」「🔍➖ズームアウト」を おしつづけても ズーム できるよ。これは「ジュリアしゅうごう」。おなじ しき でも、ひとつの すうじ(c) が かわるだけ で、ぜんぜん ちがう もよう に なるのが おもしろいね。";
+    render();
+  }
+
+  view.addEventListener("pointerdown",e=>{
+    const p=cvPos(e);
+    if(mode==="mandel"){
+      history.push({cx0,cy0,scale0});
+      if(history.length>10) history.shift();
+      cx0 = cx0+(p.x-N/2)/N*scale0;
+      cy0 = cy0+(p.y-N/2)/N*scale0;
+      scale0 *= 0.4;
+      render();
+    }else{
+      juliaC.x = (p.x-N/2)/N*2.6; juliaC.y=(p.y-N/2)/N*2.6;
+      view.setPointerCapture(e.pointerId);
+      render();
+    }
+  });
+  let rafPending=false;
+  view.addEventListener("pointermove",e=>{
+    if(mode!=="julia") return;
+    if(e.pressure===0 && e.buttons===0) return;
+    const p=cvPos(e);
+    juliaC.x = (p.x-N/2)/N*2.6; juliaC.y=(p.y-N/2)/N*2.6;
+    if(rafPending) return;
+    rafPending=true;
+    requestAnimationFrame(()=>{ rafPending=false; render(); });
+  });
+
+  tabM.onclick=()=>setMode("mandel");
+  tabJ.onclick=()=>setMode("julia");
+  btnBack.onclick=()=>{ const h=history.pop(); if(h){cx0=h.cx0;cy0=h.cy0;scale0=h.scale0;render();} };
+  btnReset.onclick=()=>{
+    if(mode==="mandel"){ cx0=-0.5;cy0=0;scale0=2.6;history=[]; }
+    else{ juliaC={x:-0.4,y:0.6}; juliaScale=2.6; }
+    render();
+  };
+
+  /* ── おしつづけると ずっと ズームしつづける ── */
+  let zoomDir=0;
+  function zoomLoop(){
+    if(zoomDir!==0){
+      const factor = zoomDir>0 ? 0.965 : 1/0.965;
+      if(mode==="mandel"){ scale0=Math.max(0.0006,Math.min(4,scale0*factor)); }
+      else{ juliaScale=Math.max(0.02,Math.min(4,juliaScale*factor)); }
+      render();
+    }
+    requestAnimationFrame(zoomLoop);
+  }
+  requestAnimationFrame(zoomLoop);
+  function bindZoom(btn,dir){
+    btn.addEventListener("pointerdown",e=>{ zoomDir=dir; btn.setPointerCapture(e.pointerId); });
+    ["pointerup","pointerleave","pointercancel"].forEach(ev=>
+      btn.addEventListener(ev,()=>{ if(zoomDir===dir) zoomDir=0; }));
+  }
+  bindZoom(btnZoomIn,1);
+  bindZoom(btnZoomOut,-1);
+
+  setMode("mandel");
+})();
+</script>
+</body>
+</html>

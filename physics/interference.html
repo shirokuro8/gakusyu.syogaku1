@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>みずめんの はもん｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
+  .cv-wrap canvas{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow)}
+  .hud{position:absolute;top:.6rem;left:.6rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.35rem .9rem;font-weight:800;font-size:.8rem;pointer-events:none}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+  .sliderline{display:flex;align-items:center;gap:.5rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.5rem 1rem;font-weight:800;font-size:.85rem;flex:1;min-width:9.5rem}
+  .sliderline input[type=range]{flex:1;accent-color:var(--theme)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">💧 みずめんの はもん</div>
+  <div class="cv-wrap">
+    <canvas id="view" class="playcv"></canvas>
+    <div class="hud" id="hud">いし: 0こ</div>
+  </div>
+  <div class="toolbar">
+    <label class="sliderline"><span>🌊 なみの みじかさ</span><input type="range" class="focusable" id="waveR" min="8" max="24" step="1" value="8"></label>
+    <label class="sliderline"><span>⏩ ひろがる はやさ</span><input type="range" class="focusable" id="speedR" min="1" max="10" step="1" value="1"></label>
+  </div>
+  <div class="toolbar">
+    <button class="focusable" id="btnClear">🧹 きれいに</button>
+  </div>
+  <div class="sim-desc">がめんを タップすると、そこに いし を なげこんだ みたいに なみの わ が ひろがるよ。いしを 2つ・3つと ふやすと、なみ と なみ が ぶつかりあう「かんしょう」が おきるよ。なみの やま どうしが かさなると もっと たかく(しろく)、やま と たに が かさなると うち消しあって しずか(くらく) に なる ところが できて、しま模様が うかびあがるよ。おいた いしを もういちど タップすると けせるよ。</div>
+</div>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const view=$("#view"), ctx=view.getContext("2d");
+  const W=220,H=150; view.width=W; view.height=H;
+  function fitCanvas(){
+    const box=view.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    view.style.width=(W*scale)+"px"; view.style.height=(H*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  function cvPos(e){const r=view.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height)};}
+
+  const img=ctx.createImageData(W,H);
+  const MAX_SRC=5;
+  let sources=[]; // {x,y,t0}
+  let t=0;
+  const waveR=$("#waveR"), speedR=$("#speedR"), hud=$("#hud");
+
+  view.addEventListener("pointerdown",e=>{
+    const p=cvPos(e);
+    let hit=-1,best=14*14;
+    for(let i=0;i<sources.length;i++){const dx=sources[i].x-p.x,dy=sources[i].y-p.y,d2=dx*dx+dy*dy;
+      if(d2<best){best=d2;hit=i;}}
+    if(hit>=0){sources.splice(hit,1);}
+    else{
+      if(sources.length>=MAX_SRC) sources.shift();
+      sources.push({x:p.x,y:p.y,t0:t});
+    }
+    updateHud();
+  });
+  $("#btnClear").onclick=()=>{sources=[];updateHud();};
+  function updateHud(){hud.textContent=`いし: ${sources.length}こ`;}
+
+  function frame(){
+    t += 0.08 + (+speedR.value)*0.02;
+    const k = 1/((+waveR.value));
+    const speedPx = 0.6 + (+speedR.value)*0.15;
+    const px=img.data;
+    for(let j=0;j<H;j++){
+      for(let i=0;i<W;i++){
+        let sum=0, any=false;
+        for(let s=0;s<sources.length;s++){
+          const src=sources[s];
+          const age=t-src.t0; if(age<0) continue;
+          const dx=i-src.x, dy=j-src.y, r=Math.sqrt(dx*dx+dy*dy);
+          const front=age*speedPx;
+          if(r>front) continue;
+          any=true;
+          const amp=1/(1+r*0.045);
+          sum += amp*Math.sin(k*r - age*0.9);
+        }
+        const o=(j*W+i)*4;
+        if(!any){
+          px[o]=18; px[o+1]=40; px[o+2]=78; px[o+3]=255;
+        }else{
+          const v=Math.max(-1,Math.min(1,sum));
+          if(v>=0){
+            px[o]=18+v*180; px[o+1]=60+v*170; px[o+2]=110+v*145; px[o+3]=255;
+          }else{
+            const n=-v;
+            px[o]=18-n*14; px[o+1]=40-n*28; px[o+2]=78-n*40; px[o+3]=255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(img,0,0);
+    for(let s=0;s<sources.length;s++){
+      ctx.fillStyle="#ffe9a8"; ctx.beginPath();
+      ctx.arc(sources[s].x,sources[s].y,2.2,0,Math.PI*2); ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  updateHud();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

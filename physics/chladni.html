@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>おとが つくる もよう｜ぶつりラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body{user-select:none;touch-action:none}
+  html,body{height:100%;overflow:hidden}
+  #app{height:100%;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;overflow:hidden}
+  .pagetitle{flex:0 0 auto;margin:0}
+  .cv-wrap{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+  .cv-wrap canvas{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow)}
+  .toolbar{flex:0 0 auto;margin-top:0}
+  .sim-desc{flex:0 0 auto;margin-top:0}
+  .sliderline{display:flex;align-items:center;gap:.5rem;background:var(--card);border-radius:99px;
+    box-shadow:var(--shadow);padding:.5rem 1rem;font-weight:800;font-size:.85rem;flex:1;min-width:9.5rem}
+  .sliderline input[type=range]{flex:1;accent-color:var(--theme)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="pagetitle">🔔 おとが つくる もよう</div>
+  <div class="cv-wrap"><canvas id="view" class="playcv"></canvas></div>
+  <div class="toolbar">
+    <button class="focusable" id="btnSound">🔈 おとを ならす</button>
+  </div>
+  <div class="toolbar">
+    <label class="sliderline"><span>🎵 たての おと</span><input type="range" class="focusable" id="nR" min="1" max="8" step="1" value="1"></label>
+    <label class="sliderline"><span>🎵 よこの おと</span><input type="range" class="focusable" id="mR" min="1" max="8" step="1" value="2"></label>
+  </div>
+  <div class="toolbar">
+    <label class="sliderline"><span>🔊 おとの おおきさ</span><input type="range" class="focusable" id="volR" min="0" max="100" step="1" value="50"></label>
+  </div>
+  <div class="sim-desc">これは「クラドニずけい」という ふしぎな もようだよ。とう明な いた を おとで ふるわせると、すな が うごきまわって、ふるえて いない しずかな せん(ふしせん)の うえに あつまって くるんだ。「🔈おとを ならす」を おすと おとが なるよ。スライダーを うごかすと おとの たかさ が かわって、それに あわせて もよう も かわるよ。がめんを タップすると いた を「トン」と たたいて、すな が いちど ちらばって、また ぴったり の もよう に もどって いくよ。</div>
+</div>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const view=$("#view"), ctx=view.getContext("2d");
+  const W=320,H=320; view.width=W; view.height=H;
+  function fitCanvas(){
+    const box=view.parentElement.getBoundingClientRect();
+    const scale=Math.min(box.width/W, box.height/H);
+    view.style.width=(W*scale)+"px"; view.style.height=(H*scale)+"px";
+  }
+  window.addEventListener("resize",fitCanvas); fitCanvas();
+  function cvPos(e){const r=view.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height)};}
+
+  let n=1,m=2, kick=0;
+  const N_PARTICLES=1800;
+  const px=new Float32Array(N_PARTICLES), py=new Float32Array(N_PARTICLES);
+  for(let i=0;i<N_PARTICLES;i++){ px[i]=Math.random()*2-1; py[i]=Math.random()*2-1; }
+
+  function field(x,y){
+    return Math.cos(n*Math.PI*x)*Math.cos(m*Math.PI*y) - Math.cos(m*Math.PI*x)*Math.cos(n*Math.PI*y);
+  }
+
+  function scatter(){ for(let i=0;i<N_PARTICLES;i++){ px[i]=Math.random()*2-1; py[i]=Math.random()*2-1; } }
+
+  /* ── おと(Web Audio)でモードを コントロール ── */
+  const nR=$("#nR"), mR=$("#mR"), volR=$("#volR"), btnSound=$("#btnSound");
+  let actx=null, osc=null, gain=null, soundOn=false;
+  function freqFromNM(){ return 110*Math.sqrt(n*n+m*m); }
+  function startSound(){
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(!osc){
+      osc=actx.createOscillator(); gain=actx.createGain();
+      osc.type="sine"; osc.frequency.value=freqFromNM();
+      gain.gain.value=0; osc.connect(gain); gain.connect(actx.destination);
+      osc.start();
+    }
+    actx.resume();
+    gain.gain.setTargetAtTime((+volR.value)/100*0.18, actx.currentTime, 0.05);
+    soundOn=true; btnSound.textContent="🔇 とめる"; btnSound.classList.add("on");
+  }
+  function stopSound(){
+    if(gain) gain.gain.setTargetAtTime(0, actx.currentTime, 0.05);
+    soundOn=false; btnSound.textContent="🔈 おとを ならす"; btnSound.classList.remove("on");
+  }
+  btnSound.addEventListener("click",()=>{ soundOn ? stopSound() : startSound(); });
+
+  function updateMode(){
+    n=+nR.value; m=+mR.value; scatter();
+    if(osc) osc.frequency.setTargetAtTime(freqFromNM(), actx.currentTime, 0.05);
+  }
+  nR.addEventListener("input",updateMode);
+  mR.addEventListener("input",updateMode);
+  volR.addEventListener("input",()=>{ if(soundOn) gain.gain.setTargetAtTime((+volR.value)/100*0.18, actx.currentTime, 0.05); });
+
+  view.addEventListener("pointerdown",e=>{ kick=1.6; });
+
+  function step(){
+    const stepSize=0.028, wander=0.015+kick*0.4;
+    for(let i=0;i<N_PARTICLES;i++){
+      const v0=Math.abs(field(px[i],py[i]));
+      const ang=Math.random()*Math.PI*2;
+      let nx=px[i]+Math.cos(ang)*stepSize, ny=py[i]+Math.sin(ang)*stepSize;
+      if(nx<-1)nx=-1; if(nx>1)nx=1; if(ny<-1)ny=-1; if(ny>1)ny=1;
+      const v1=Math.abs(field(nx,ny));
+      if(v1<=v0 || Math.random()<wander){ px[i]=nx; py[i]=ny; }
+    }
+    if(kick>0) kick=Math.max(0,kick-0.03);
+  }
+
+  function draw(){
+    ctx.fillStyle="#141c2e"; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="#2a3652"; ctx.lineWidth=6; ctx.strokeRect(3,3,W-6,H-6);
+    const s=W/2;
+    ctx.fillStyle="#ffe9a8";
+    for(let i=0;i<N_PARTICLES;i++){
+      const gx=(px[i]+1)*s, gy=(py[i]+1)*s;
+      ctx.fillRect(gx,gy,1.6,1.6);
+    }
+  }
+
+  function frame(){ step(); draw(); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
