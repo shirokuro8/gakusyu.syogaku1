@@ -150,6 +150,23 @@ button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
 .modal .close{position:absolute;top:1rem;right:1rem;background:#fff;border-radius:99px;
   width:3rem;height:3rem;font-size:1.4rem;font-weight:800;box-shadow:var(--shadow);z-index:4}
 .empty{text-align:center;color:var(--ink2);font-weight:700;padding:1.5rem 0}
+/* ── ログ（くわしい 学習きろく） ── */
+.log-row{border-left:6px solid var(--line);border-radius:12px;background:var(--paper);
+  padding:.6rem .8rem;margin-bottom:.6rem}
+.log-row.kokugo{border-left-color:var(--kokugo)}
+.log-row.sansu{border-left-color:var(--sansu)}
+.log-row.shakai{border-left-color:var(--shakai)}
+.log-row.rika{border-left-color:var(--rika)}
+.log-row.eigo{border-left-color:var(--eigo)}
+.log-row.ijin{border-left-color:var(--ijin)}
+.log-row.review{border-left-color:var(--ng)}
+.log-row.game,.log-row.physics{border-left-color:var(--fun)}
+.log-top{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin-bottom:.3rem}
+.log-dt{font-weight:800;font-size:.78rem;color:var(--ink2)}
+.log-chip{background:var(--card);border-radius:99px;padding:.1rem .6rem;
+  font-size:.72rem;font-weight:700;color:var(--ink2)}
+.log-main{font-weight:800;font-size:1rem;margin-bottom:.35rem}
+.log-stats{display:flex;flex-wrap:wrap;gap:.9rem;font-size:.82rem;font-weight:700;color:var(--ink2)}
 /* ── まちがいノート バナー（ダッシュボードの近く） ── */
 .review-card{display:flex;align-items:center;gap:.9rem;background:var(--card);
   border-radius:var(--r);box-shadow:var(--shadow);padding:.8rem 1rem;margin-bottom:1.1rem;

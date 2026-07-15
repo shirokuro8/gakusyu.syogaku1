@@ -45,6 +45,11 @@
    1) physics/xxx.html として1ファイルで完結するシミュレーションを作る
    2) js/app.js の PHYSICS_SIMS に {title, emoji, tag, src:'physics/xxx.html'} を追加（iframeで開く）
    ※ チケット/ライフ管理は不要（openPhysicsSim() は閉じるボタンのみのシンプルなモーダル）。
+ ■ ログ（日時・学年・科目・単元・点数・☆・チケットの くわしい 一覧）:
+   ・クイズ/まちがいノートの結果、ゲーム/ぶつりラボの利用のたびに addLog()（js/app.js）で
+     DB.log に記録（最新 LOG_MAX 件まで保持）。
+   ・ホーム画面いちばん下の「🧾 ログを みる」ボタン→ renderLog() で一覧表示する。
+   ・新しい記録の種類を足す場合は SUBJECT_LABEL にラベルを追加し、該当箇所で addLog() を呼ぶこと。
 ═══════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">

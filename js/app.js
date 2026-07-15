@@ -98,23 +98,30 @@ const EXTRA_GAMES=[
 ];
 /* ================= 保存（localStorage） ================= */
 const KEY="bq2_data";
-const MAX_TICKETS=5;      // ためられる チケットの上限
+const MAX_TICKETS=5;      // まちがいノートボーナスで ためられる チケットの上限（クイズクリアぶんは 上限なしで必ず発行）
 const TICKET_LIVES=3;     // チケット1まいで あそべる回数（ゲームオーバー3回で終了）
 const WRONG_NOTE_GOAL=5;  // まちがいノートの もんだいを これだけ正解すると チケット1まい
 let DB=load();
 function load(){
   const def={v:2,grade:"g1",stars:{},best:{},stats:{},hist:[],wrong:[],streak:{last:"",n:0},mute:false,
-    tickets:0,wrongProg:0};
+    tickets:0,wrongProg:0,log:[],cleared:{}};
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.v===2)return Object.assign(def,d)}catch(e){}
   return def;}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
 function today(){return new Date().toISOString().slice(0,10)}
+/* ── ログ（学習の記録を くわしく のこす） ── */
+const LOG_MAX=300;         // ためられる ログの けんすう
+const SUBJECT_LABEL={kokugo:"こくご",sansu:"さんすう",shakai:"しゃかい",rika:"りか",eigo:"えいご",
+  ijin:"偉人・名言",review:"まちがいノート",game:"ゲーム",physics:"ぶつりラボ"};
+function addLog(entry){DB.log=DB.log||[];DB.log.unshift(entry);DB.log=DB.log.slice(0,LOG_MAX);}
+function fmtDT(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
 function bumpStreak(){const t=today();if(DB.streak.last===t)return;
   const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
   DB.streak.n=(DB.streak.last===y)?DB.streak.n+1:1;DB.streak.last=t;}
 /* ── ゲームチケット ── */
-function grantTickets(qualifies){                          // 条件を みたせば 必ず チケットを1まい発行（上限まで）
-  if(!qualifies||(DB.tickets||0)>=MAX_TICKETS)return 0;
+function grantTickets(qualifies){                          // 条件を みたせば 上限なしで 必ず チケットを1まい発行
+  if(!qualifies)return 0;
   DB.tickets=(DB.tickets||0)+1;return 1;}
 /* まちがいノート: まちがえた問題を WRONG_NOTE_GOAL 問 正解するたびに チケット1まい */
 function grantWrongNoteTickets(correctCount){DB.wrongProg=(DB.wrongProg||0)+correctCount;let earned=0;
@@ -135,7 +142,7 @@ const app=$("#app");
 let quiz=null, timerId=null;
 function go(screen,arg){stopTimer();
   ({home:renderHome,quiz:startQuiz,result:renderResult,record:renderRecord,
-    games:renderGames,review:startReview,physics:renderPhysics})[screen](arg);
+    games:renderGames,review:startReview,physics:renderPhysics,log:renderLog})[screen](arg);
   window.scrollTo(0,0);}
 function curGrade(){return GRADES.find(g=>g.id===DB.grade)||GRADES[0]}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
@@ -220,6 +227,9 @@ function renderHome(){
   <div class="rowbtns">
     <button class="bigbtn focusable" data-act="record">📊 きろくを みる</button>
     <button class="bigbtn focusable" data-act="mute">${DB.mute?"🔇 おとを だす":"🔊 おとを けす"}</button>
+  </div>
+  <div class="rowbtns">
+    <button class="bigbtn focusable" data-act="log">🧾 ログを みる</button>
   </div>`;
 }
 /* ── クイズ ── */
@@ -286,17 +296,19 @@ function finishQuiz(){
   let ticketEarned=0;
   if(!stage.review){
     const prevBest=DB.best[stage.id]||0;
-    const isFirstClear=prevBest===0;                           // このステージ、はじめてのクリア
+    const isFirstClear=!(DB.cleared&&DB.cleared[stage.id]);     // このステージで まだ一度も チケットを もらっていない
     const isNewRecord=score>=prevBest;                          // 自己ベスト タイ or 更新
-    const isHighAcc=acc>=90;                                    // せいかい率 9割いじょう
+    const isHighAcc=acc>=90;                                    // せいかい率 9割いじょう（満点ふくむ）
     // 初回クリアは 半分(50%)以上正解、2回目いこうは 自己ベスト更新 か 9割いじょうなら 何度でもOK
     const qualifies=isFirstClear?acc>=50:(isNewRecord||isHighAcc);
     DB.stars[stage.id]=Math.max(DB.stars[stage.id]||0,stars);
     DB.best[stage.id]=Math.max(prevBest,score);
     const st=DB.stats[stage.id]||{c:0,t:0};st.c+=cor;st.t+=qs.length;DB.stats[stage.id]=st;
-    const wrongGateActive=DB.wrong.length>=10;                 // まちがい10以上は付与停止(ノート優先)
+    // まちがい10以上は付与停止(ノート優先)。ただし9割いじょう(満点ふくむ)は 何度でも必ず発行
+    const wrongGateActive=DB.wrong.length>=10&&!isHighAcc;
     // 条件を みたせば 必ず チケットを1まい発行
     ticketEarned=grantTickets(qualifies&&!wrongGateActive);
+    if(ticketEarned>0){DB.cleared=DB.cleared||{};DB.cleared[stage.id]=true}
     quiz.isFirstClear=isFirstClear;quiz.isNewRecord=isNewRecord;quiz.isHighAcc=isHighAcc;quiz.prevBest=prevBest;
     quiz.wrongGateActive=wrongGateActive;
   }else{ // まちがいノート: 正解した問題はノートから除去し、正解数に応じてチケットを付与
@@ -307,6 +319,12 @@ function finishQuiz(){
   wrongList.forEach(w=>{if(DB.wrong.length<60&&!DB.wrong.find(x=>x.q.q===w.q.q&&x.q.big===w.q.big))DB.wrong.push(w)});
   DB.hist.unshift({d:today(),g:DB.grade,s:stage.name,acc,score,n:qs.length});
   DB.hist=DB.hist.slice(0,100);
+  const logSubject=stage.review?"review":stage.subject;
+  addLog({ts:new Date().toISOString(),grade:DB.grade,gradeLabel:curGrade().label,
+    subject:logSubject,subjectLabel:SUBJECT_LABEL[logSubject]||logSubject,
+    unit:stage.name,emoji:stage.emoji,
+    score,acc,cor,total:qs.length,stars:stage.review?null:stars,
+    ticket:ticketEarned,ticketBalance:DB.tickets||0});
   save();
   renderResult({stage,acc,cor,total:qs.length,score,stars,time:Math.round((Date.now()-quiz.t0)/1000),
     ticketEarned,tickets:DB.tickets||0,
@@ -385,6 +403,31 @@ function renderRecord(){
   ${ijinCard}
   <div class="rec-card"><div style="font-weight:800;margin-bottom:.4rem">さいきんの きろく</div>${hist}</div>`;
 }
+/* ── ログ（日時・学年・科目・単元・点数・☆・チケットの くわしい 一覧） ── */
+function renderLog(){
+  const rows=(DB.log||[]).map(l=>{
+    const scoreTx=l.score==null?"ー":
+      `${l.score}点${l.total?`（${l.cor}/${l.total}問 ${l.acc}%）`:""}`;
+    const starTx=l.stars==null?"ー":"⭐".repeat(l.stars)+"☆".repeat(3-l.stars);
+    const tkTx=l.ticket?`${l.ticket>0?"+":""}${l.ticket}まい → ${l.ticketBalance}まい`:`${l.ticketBalance}まい`;
+    return `<div class="log-row ${l.subject}">
+      <div class="log-top">
+        <span class="log-dt">${fmtDT(l.ts)}</span>
+        <span class="log-chip">${esc(l.gradeLabel||"")}</span>
+        <span class="log-chip">${esc(l.subjectLabel)}</span>
+      </div>
+      <div class="log-main">${l.emoji||""} ${esc(l.unit)}</div>
+      <div class="log-stats">
+        <span>📊 ${scoreTx}</span>
+        <span>⭐ ${starTx}</span>
+        <span>🎟️ ${tkTx}</span>
+      </div>
+    </div>`;}).join("")||`<div class="empty">まだ ログが ないよ</div>`;
+  app.innerHTML=`
+  <button class="back focusable" data-act="home">← もどる</button>
+  <div class="pagetitle">🧾 ログ</div>
+  <div class="rec-card">${rows}</div>`;
+}
 /* ── ゲームひろば ── */
 function renderGames(){
   const extras=EXTRA_GAMES.map((g,i)=>`
@@ -417,7 +460,12 @@ function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
     document.body.appendChild(m);
     return;
   }
-  DB.tickets-=cost;save();               // チケットを cost まい消費（開始時に消費）
+  DB.tickets-=cost;                      // チケットを cost まい消費（開始時に消費）
+  addLog({ts:new Date().toISOString(),grade:DB.grade,gradeLabel:curGrade().label,
+    subject:"game",subjectLabel:SUBJECT_LABEL.game,unit:g.title,emoji:g.emoji,
+    score:null,acc:null,cor:null,total:null,stars:null,
+    ticket:-cost,ticketBalance:DB.tickets||0});
+  save();
   let lives=TICKET_LIVES;
   const m=document.createElement("div");m.className="modal";
   m.innerHTML=`
@@ -474,6 +522,11 @@ function renderPhysics(){
 }
 /* ── シミュレーションをiframeで開く（学習用のため ゲームチケットは消費しない） ── */
 function openPhysicsSim(i){const p=PHYSICS_SIMS[i];if(!p)return;
+  addLog({ts:new Date().toISOString(),grade:DB.grade,gradeLabel:curGrade().label,
+    subject:"physics",subjectLabel:SUBJECT_LABEL.physics,unit:p.title,emoji:p.emoji,
+    score:null,acc:null,cor:null,total:null,stars:null,
+    ticket:0,ticketBalance:DB.tickets||0});
+  save();
   const m=document.createElement("div");m.className="modal";
   m.innerHTML=`
   <div class="stage">
@@ -494,6 +547,7 @@ app.addEventListener("click",e=>{
   else if(act==="home")go("home");
   else if(act==="retry")go("quiz",window._lastStage);
   else if(act==="record")go("record");
+  else if(act==="log")go("log");
   else if(act==="games")go("games");
   else if(act==="physics")go("physics");
   else if(act==="review")go("review");
