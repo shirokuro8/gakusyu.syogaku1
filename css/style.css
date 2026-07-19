@@ -190,4 +190,14 @@ canvas.playcv{display:block;width:100%;border-radius:var(--r);background:#0d1b3d
 .toolbar button.on{border-color:var(--theme);color:var(--theme)}
 .sim-desc{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
   padding:.75rem .95rem;margin-top:.7rem;font-size:.85rem;font-weight:700;color:var(--ink2);line-height:1.6}
+/* ── きょうの もくひょう（ホームの🎯バー。bar-bg/bar-fg は「きろく」と共通） ── */
+.goal-card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
+  padding:.75rem 1rem;margin-bottom:1.1rem}
+.goal-tx{font-weight:800;font-size:.95rem;margin-bottom:.45rem}
+/* ── 結果画面：まちがえた問題の こたえ一覧 ── */
+.res-wrong{margin:1rem 0 .2rem;text-align:left;background:var(--paper);border-radius:14px;padding:.9rem}
+.rw-title{font-weight:800;margin-bottom:.3rem}
+.rw-item{padding:.5rem 0;border-top:1px dashed var(--line);font-size:.9rem;font-weight:700}
+.rw-q{color:var(--ink2);line-height:1.9}
+.rw-a{color:#1c9e6d;margin-top:.15rem}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

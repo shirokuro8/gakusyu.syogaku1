@@ -153,16 +153,21 @@ function load(){
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.v===2)return Object.assign(def,d)}catch(e){}
   return def;}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
-function today(){return new Date().toISOString().slice(0,10)}
+/* 日付は端末のローカル時刻で判定する（toISOString()はUTCのため、日本では朝9時前に「前日」扱いになり
+ * れんぞく日数・きょうの問題数がずれる不具合があった） */
+function localDate(t){const d=t?new Date(t):new Date();const p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
+function today(){return localDate()}
 /* ── ログ（学習の記録を くわしく のこす） ── */
 const LOG_MAX=300;         // ためられる ログの けんすう
+const DAILY_GOAL=30;       // きょうの もくひょう問題数（ホームの🎯バーに表示。renderHome()を参照）
 const SUBJECT_LABEL={kokugo:"こくご",sansu:"さんすう",shakai:"しゃかい",rika:"りか",eigo:"えいご",
   ijin:"偉人・名言",sougou:"そうごう問題",review:"まちがいノート",game:"ゲーム",physics:"ぶつりラボ"};
 function addLog(entry){DB.log=DB.log||[];DB.log.unshift(entry);DB.log=DB.log.slice(0,LOG_MAX);}
 function fmtDT(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,"0");
   return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
 function bumpStreak(){const t=today();if(DB.streak.last===t)return;
-  const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const y=localDate(Date.now()-864e5);
   DB.streak.n=(DB.streak.last===y)?DB.streak.n+1:1;DB.streak.last=t;}
 /* ── ゲームチケット ── */
 function grantTickets(n){                                  // n まい発行（上限なし・必ず発行）。0以下なら発行しない
@@ -182,6 +187,9 @@ function beep(f,d=.12,type="sine"){if(DB.mute)return;
   o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);}catch(e){}}
 const sOK=()=>{beep(880,.1);setTimeout(()=>beep(1320,.15),90)};
 const sNG=()=>beep(180,.3,"square");
+/* 結果画面のファンファーレ（★の数に応じて音が増える。beep()がミュートを見るので個別チェック不要） */
+const sFanfare=st=>{beep(660,.12);setTimeout(()=>beep(880,.12),130);setTimeout(()=>beep(1320,.3),260);
+  if(st>=3)setTimeout(()=>beep(1760,.35),450);};
 /* ================= 画面遷移 ================= */
 const app=$("#app");
 let quiz=null, timerId=null;
@@ -198,6 +206,7 @@ function renderHome(){
   document.body.dataset.grade=DB.grade;
   const g=curGrade();
   let tot=0,cor=0,starSum=0;const todayHist=DB.hist.filter(h=>h.d===today());
+  const todayN=todayHist.reduce((a,h)=>a+h.n,0);
   g.stages.forEach(s=>{const st=DB.stats[s.id];if(st){tot+=st.t;cor+=st.c}starSum+=DB.stars[s.id]||0;});
   const acc=tot?Math.round(cor/tot*100):0;
   const CIRC=2*Math.PI*42;
@@ -234,8 +243,12 @@ function renderHome(){
     <div class="dash-stats">
       <div class="dstat"><b>⭐${starSum}</b><small>この学年の星</small></div>
       <div class="dstat"><b>🔥${DB.streak.n}</b><small>れんぞく日</small></div>
-      <div class="dstat"><b>${todayHist.reduce((a,h)=>a+h.n,0)}</b><small>きょうの問題</small></div>
+      <div class="dstat"><b>${todayN}</b><small>きょうの問題</small></div>
     </div>
+  </div>
+  <div class="goal-card">
+    <div class="goal-tx">🎯 きょうの もくひょう <b>${todayN} / ${DAILY_GOAL}もん</b>${todayN>=DAILY_GOAL?"　🎉 たっせい！":""}</div>
+    <div class="bar-bg"><div class="bar-fg" style="width:${Math.min(100,Math.round(todayN/DAILY_GOAL*100))}%"></div></div>
   </div>
   ${DB.wrong.length?`
   <button class="review-card focusable" data-act="review">
@@ -331,9 +344,10 @@ function answer(ci){stopTimer();
     const el=(Date.now()-quiz.qStart)/1000;const lim=quiz.stage.time;
     quiz.score+=100+Math.max(0,Math.round((lim-el)/lim*50));}
   else{sNG();quiz.wrongList.push({q,stageId:quiz.stage.id});}
+  // まちがえたときは 正解（緑わく）を ながめる時間を ながくとる（学習効果のため）
   setTimeout(()=>{fb.remove();
     quiz.i++;
-    if(quiz.i<quiz.qs.length)renderQ();else finishQuiz();},900);}
+    if(quiz.i<quiz.qs.length)renderQ();else finishQuiz();},ok?900:1600);}
 function finishQuiz(){
   const {stage,qs,cor,score,wrongList}=quiz;
   const acc=Math.round(cor/qs.length*100);
@@ -380,12 +394,13 @@ function finishQuiz(){
     ticket:ticketEarned,ticketBalance:DB.tickets||0});
   save();
   renderResult({stage,acc,cor,total:qs.length,score,stars,time:Math.round((Date.now()-quiz.t0)/1000),
-    ticketEarned,tickets:DB.tickets||0,
+    wrongs:wrongList,ticketEarned,tickets:DB.tickets||0,
     isFirstClear:quiz.isFirstClear,isNewRecord:quiz.isNewRecord,isHighAcc:quiz.isHighAcc,prevBest:quiz.prevBest||0,
     wrongGateActive:quiz.wrongGateActive||false});
 }
 function renderResult(r){
   const msg=r.acc>=90?"すごい！パーフェクトきゅう！":r.acc>=70?"よくできました！":r.acc>=50?"がんばったね！":"もういちど ちょうせんしよう！";
+  if(r.stars>=1)sFanfare(r.stars);
   let tk="";
   if(r.stage.review){
     if(r.ticketEarned>0){
@@ -435,6 +450,13 @@ function renderResult(r){
       <div class="rstat"><b>${r.time}秒</b><small>タイム</small></div>
     </div>
     ${tk}
+    ${r.wrongs&&r.wrongs.length?`
+    <div class="res-wrong">
+      <div class="rw-title">📖 まちがえた もんだいの こたえ</div>
+      ${r.wrongs.map(w=>`<div class="rw-item">
+        <div class="rw-q">${furi(w.q.q).replace(/\n/g,"　")}${w.q.big?` <b>${furi(w.q.big)}</b>`:""}</div>
+        <div class="rw-a">こたえ → <b>${furi(w.q.choices[w.q.answer])}</b></div></div>`).join("")}
+    </div>`:""}
     <div class="rowbtns">
       <button class="bigbtn focusable" data-act="retry">🔁 もういちど</button>
       <button class="bigbtn focusable" data-act="home">🏠 ホーム</button>
@@ -443,21 +465,16 @@ function renderResult(r){
   window._lastStage=r.stage;
 }
 /* ── きろく ── */
+function recRow(s){ // 1ステージぶんの正答率バー（学年カード・偉人カード共通）
+  const st=DB.stats[s.id];const acc=st&&st.t?Math.round(st.c/st.t*100):null;
+  return `<div class="rec-row"><span class="nm">${s.emoji} ${s.name}</span>
+    <div class="bar-bg"><div class="bar-fg" style="width:${acc||0}%"></div></div>
+    <span class="pc">${acc===null?"ー":acc+"%"}</span></div>`;}
 function renderRecord(){
-  const rows=GRADES.map(g=>{
-    const inner=g.stages.map(s=>{
-      const st=DB.stats[s.id];const acc=st&&st.t?Math.round(st.c/st.t*100):null;
-      return `<div class="rec-row"><span class="nm">${s.emoji} ${s.name}</span>
-        <div class="bar-bg"><div class="bar-fg" style="width:${acc||0}%"></div></div>
-        <span class="pc">${acc===null?"ー":acc+"%"}</span></div>`;}).join("");
-    return `<div class="rec-card"><div style="font-weight:800;margin-bottom:.4rem">${g.label}</div>${inner}</div>`;
-  }).join("");
-  const ijinInner=IJIN_STAGES.map(s=>{
-    const st=DB.stats[s.id];const acc=st&&st.t?Math.round(st.c/st.t*100):null;
-    return `<div class="rec-row"><span class="nm">${s.emoji} ${s.name}</span>
-      <div class="bar-bg"><div class="bar-fg" style="width:${acc||0}%"></div></div>
-      <span class="pc">${acc===null?"ー":acc+"%"}</span></div>`;}).join("");
-  const ijinCard=`<div class="rec-card"><div style="font-weight:800;margin-bottom:.4rem">偉人・名言</div>${ijinInner}</div>`;
+  const rows=GRADES.map(g=>
+    `<div class="rec-card"><div style="font-weight:800;margin-bottom:.4rem">${g.label}</div>${g.stages.map(recRow).join("")}</div>`
+  ).join("");
+  const ijinCard=`<div class="rec-card"><div style="font-weight:800;margin-bottom:.4rem">偉人・名言</div>${IJIN_STAGES.map(recRow).join("")}</div>`;
   const hist=DB.hist.slice(0,15).map(h=>
     `<div class="hist">${h.d}　${h.s}　${h.acc}%　${h.score}点</div>`).join("")||`<div class="empty">まだ きろくが ないよ</div>`;
   app.innerHTML=`
@@ -610,11 +627,12 @@ app.addEventListener("click",e=>{
   const act=b.dataset.act;
   if(act==="grade"){DB.grade=b.dataset.id;save();renderHome();}
   else if(act==="stage"){const s=curGrade().stages.find(x=>x.id===b.dataset.id)
-    ||GRADES.flatMap(g=>g.stages).find(x=>x.id===b.dataset.id);go("quiz",s);}
+    ||GRADES.flatMap(g=>g.stages).find(x=>x.id===b.dataset.id);if(s)go("quiz",s);}
   else if(act==="specialstage"){const s=IJIN_STAGES.find(x=>x.id===b.dataset.id);if(s)go("quiz",s);}
   else if(act==="ans")answer(+b.dataset.i);
   else if(act==="home")go("home");
-  else if(act==="retry")go("quiz",window._lastStage);
+  // まちがいノートのステージは gen を持たないため、通常クイズとして再開するとクラッシュする → review画面へ
+  else if(act==="retry"){const s=window._lastStage;if(s&&s.review)go("review");else if(s)go("quiz",s);}
   else if(act==="record")go("record");
   else if(act==="log")go("log");
   else if(act==="games")go("games");

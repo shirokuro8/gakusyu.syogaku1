@@ -84,8 +84,9 @@ function g2vol(){const t=R(3);
   if(t===1){const l=R(3)+1;return mk(`${l}L ＝ なんmL？`,`${l*1000}mL`,[`${l*100}mL`,`${l*10}mL`,`${l*1000+100}mL`])}
   const d=R(9)+1;return mk(`${d}dL ＝ なんmL？`,`${d*100}mL`,[`${d*10}mL`,`${d*1000}mL`,`${d*100+50}mL`]);}
 function g2time(){const t=R(3);
-  if(t===0){const h=R(11)+1,m=pick([15,30,45]);const eh=(h+Math.floor(m/60))%12||12;
-    return mk(`${h}じから ${m}ぷんあとは？`,m===60?`${eh}じ`:`${h}じ${m}ぷん`,[`${h}じ${m+15>=60?"":m+15+"ぷん"}`||`${h}じ`,`${(h%12)+1}じ${m}ぷん`,`${h}じ${m-10}ぷん`].map(s=>s))}
+  if(t===0){const h=R(11)+1,m=pick([15,30,45]);
+    return mk(`${h}じから ${m}ぷんあとは？`,`${h}じ${m}ぷん`,
+      [`${h%12+1}じ${m}ぷん`,`${h}じ${m===15?30:m-15}ぷん`,`${h%12+1}じ`])}
   if(t===1){const a=R(9)+1,d=R(3)+1;return mk(`${a}じから ${a+d}じまで なんじかん？`,`${d}じかん`,[`${d+1}じかん`,`${d-1<=0?d+2:d-1}じかん`,`${d+3}じかん`])}
   const m=pick([30,40,50]);const h=R(10)+1;
   return mk(`${h}じ${m}ぷんの ${60-m}ぷんあとは？`,`${h+1}じ`,[`${h}じ`,`${h+2}じ`,`${h+1}じ${30}ぷん`]);}
@@ -131,7 +132,9 @@ function g3decimal(){const t=R(3);
     return mk(`0.${x} ＋ 0.${y} ＝ ？`,ans,[...ws]);}
   const x=R(9)+1,y=R(9)+1;if(x===y)return g3decimal();
   const big=Math.max(x,y),small=Math.min(x,y);
-  return mk(`0.${x} と 0.${y}、大きいのは？`,(big/10).toFixed(1),[(small/10).toFixed(1)]);}
+  // 誤答も小数でそろえる（以前は mk() の自動補充で「5.8」のような不自然な整数まじりの選択肢が出ていた）
+  return mk(`0.${x} と 0.${y}、大きいのは？`,(big/10).toFixed(1),
+    [(small/10).toFixed(1),(big/10+1).toFixed(1),(small/10+1).toFixed(1)]);}
 function g3frac(){if(R(2)){const d=pick([3,5,6]);const k=pick([2,3,4]);const n=d*k;
     return mk(`${n}この ${d}分の1は なんこ？`,n/d,numWrongs(n/d));}
   const d=pick([4,5,6]);const a=R(d-2)+1;const b=R(d-a-1)+1;const ans=a+b;
