@@ -144,6 +144,10 @@ const EXTRA_GAMES=[
  {title:"ジャンプランナー", emoji:"🦖", src:"games/jump-runner.html", cost:1},
  {title:"きらきらロケット", emoji:"🚀", src:"games/kirakira-rocket.html", cost:3},
  {title:"JUMP HERO", emoji:"🦸", src:"games/jump-hero-6.html", cost:3},
+ {title:"オセロ（コンピュータと）", emoji:"⚫", src:"games/othello.html?mode=cpu", cost:3},
+ {title:"オセロ（ふたりで）", emoji:"⚪", src:"games/othello.html?mode=pvp", cost:0},
+ {title:"どうぶつしょうぎ（コンピュータと）", emoji:"🦁", src:"games/animal-shogi.html?mode=cpu", cost:3},
+ {title:"どうぶつしょうぎ（ふたりで）", emoji:"🐘", src:"games/animal-shogi.html?mode=pvp", cost:0},
 ];
 /* ================= 保存（localStorage） ================= */
 const KEY="bq2_data";
@@ -573,10 +577,12 @@ function renderLog(){
 }
 /* ── ゲームひろば ── */
 function renderGames(){
-  const extras=EXTRA_GAMES.map((g,i)=>`
+  const extras=EXTRA_GAMES.map((g,i)=>{
+    const cost=g.cost==null?1:g.cost;
+    return `
     <button class="stage fun focusable" data-act="extgame" data-i="${i}">
       <span class="em">${g.emoji}</span><span class="nm">${g.title}</span>
-      <div class="st">🎟️${g.cost||1}まい</div></button>`).join("");
+      <div class="st">${cost<=0?"🎟️不要":`🎟️${cost}まい`}</div></button>`;}).join("");
   app.innerHTML=`
   <button class="back focusable" data-act="home">← もどる</button>
   <div class="pagetitle">🎮 ゲームひろば</div>
@@ -589,7 +595,7 @@ function renderGames(){
 }
 /* ── 外部ゲーム(iframe): チケット1まい=1プレイ（ゲーム内の3つの命を つかいきった「本当の」ゲームオーバーで おしまい。画面枠ハートは廃止） ── */
 function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
-  const cost=g.cost||1;
+  const cost=g.cost==null?1:g.cost;
   if((DB.tickets||0)<cost){              // チケットが たりなければ 遊べない
     const m=document.createElement("div");m.className="modal";
     m.innerHTML=`

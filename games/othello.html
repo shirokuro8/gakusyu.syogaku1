@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>オセロ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;min-height:100%;overflow-x:hidden;overflow-y:auto;
+    background:linear-gradient(#eaf6ee,#dcefe2);
+    font-family:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Yu Gothic UI','Yu Gothic','Meiryo',system-ui,sans-serif;
+    color:#2c3e35;overscroll-behavior:none;user-select:none;touch-action:manipulation;}
+  #app{max-width:520px;margin:0 auto;padding:12px 12px 22px;min-height:100vh;position:relative;}
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;overflow-y:auto;
+    background:radial-gradient(ellipse at 50% 20%,#eafff2f5,#d7ecdff5 70%);
+    transition:opacity .25s,visibility .25s;}
+  .overlay.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .title{font-weight:800;font-size:28px;margin:0 0 8px;}
+  .sub{font-size:14px;color:#4f6a58;font-weight:700;margin:0 0 18px;max-width:340px;line-height:1.8;}
+  .btn{font-family:inherit;font-weight:800;font-size:18px;color:#fff;
+    background:linear-gradient(135deg,#3ecf8e,#2ba36b);border:none;border-radius:999px;
+    padding:14px 34px;box-shadow:0 6px 0 #1f7a4d,0 8px 16px rgba(46,163,107,.3);cursor:pointer;margin:6px;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #1f7a4d;}
+  .lvbtn{display:block;width:100%;max-width:320px;text-align:left;background:#fff;border:none;border-radius:18px;
+    padding:12px 18px;margin:7px 0;box-shadow:0 4px 10px rgba(46,80,60,.14);font-family:inherit;cursor:pointer;}
+  .lvbtn b{display:block;font-size:18px;color:#2c3e35;}
+  .lvbtn small{color:#6b8577;font-weight:700;font-size:12.5px;}
+  .lvbtn:active{transform:scale(.97);}
+  #game-screen{display:none;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+  .scorechip{background:#fff;border-radius:999px;padding:8px 14px;font-weight:800;font-size:16px;
+    box-shadow:0 3px 8px rgba(46,80,60,.12);min-width:64px;text-align:center;}
+  .turnpill{flex:1;text-align:center;font-weight:800;font-size:15px;background:#fff;border-radius:999px;
+    padding:8px 10px;box-shadow:0 3px 8px rgba(46,80,60,.12);transition:background .2s;}
+  .turnpill.black{background:#2c3e35;color:#fff;}
+  .turnpill.white{background:#fff;color:#2c3e35;border:2px solid #2c3e35;}
+  .timerrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;height:22px;}
+  .timerbar{flex:1;height:12px;background:#cfe3d6;border-radius:99px;overflow:hidden;}
+  .timerbar i{display:block;height:100%;width:100%;background:#3ecf8e;transition:width .1s linear,background .3s;}
+  .timenum{font-weight:800;font-size:14px;min-width:22px;text-align:right;}
+  .thinking{text-align:center;font-weight:800;font-size:14px;color:#4f6a58;margin-bottom:6px;height:22px;}
+  .thinking.hidden{visibility:hidden;}
+  .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:4px;background:#1a7a4c;
+    border-radius:14px;padding:8px;box-shadow:0 6px 16px rgba(20,60,40,.25);
+    width:100%;max-width:440px;margin:4px auto 0;aspect-ratio:1;}
+  .cell{position:relative;background:#2d9b63;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+  .cell.hint::after{content:'';width:26%;height:26%;border-radius:50%;background:rgba(255,255,255,.55);}
+  .piece{width:84%;height:84%;border-radius:50%;box-shadow:0 3px 4px rgba(0,0,0,.35);animation:pop .22s ease;}
+  .piece.black{background:radial-gradient(circle at 35% 30%,#5a5a5a,#0a0a0a 72%);}
+  .piece.white{background:radial-gradient(circle at 35% 30%,#ffffff,#cfd8d4 78%);}
+  @keyframes pop{from{transform:scale(.25)}to{transform:scale(1)}}
+  .hint-text{text-align:center;font-weight:700;color:#4f6a58;font-size:12.5px;margin-top:8px;}
+  .toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:30;
+    background:#2c3e35;color:#fff;font-weight:800;font-size:14px;padding:10px 18px;border-radius:99px;
+    box-shadow:0 6px 14px rgba(0,0,0,.25);transition:opacity .25s,visibility .25s;text-align:center;max-width:88vw;}
+  .toast.hidden{opacity:0;visibility:hidden;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="game-screen">
+    <div class="topbar">
+      <div class="scorechip" id="scoreBlack">⚫ 2</div>
+      <div class="turnpill black" id="turnPill">⚫ くろの ばん</div>
+      <div class="scorechip" id="scoreWhite">⚪ 2</div>
+    </div>
+    <div class="timerrow" id="timerRow">
+      <div class="timerbar"><i id="timeBar"></i></div>
+      <div class="timenum" id="timeLabel">20</div>
+    </div>
+    <div class="thinking hidden" id="thinking">🤔 コンピュータが かんがえちゅう…</div>
+    <div class="board" id="board"></div>
+    <div class="hint-text">⚪の まる が ある ますに おけるよ</div>
+  </div>
+</div>
+
+<div id="start-screen" class="overlay"></div>
+<div id="result-screen" class="overlay hidden">
+  <div style="font-size:54px" id="resultEmoji">🏆</div>
+  <h1 class="title" id="resultText"></h1>
+  <p class="sub" id="resultSub" style="font-size:20px"></p>
+</div>
+<div class="toast hidden" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const EMPTY=0, BLACK=1, WHITE=2;
+  const HUMAN_COLOR=BLACK, AI_COLOR=WHITE;
+  const TIME_LIMIT=20;
+  const DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const WEIGHTS=[
+    [120,-20,20,5,5,20,-20,120],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [20,-5,15,3,3,15,-5,20],
+    [5,-5,3,3,3,3,-5,5],
+    [5,-5,3,3,3,3,-5,5],
+    [20,-5,15,3,3,15,-5,20],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [120,-20,20,5,5,20,-20,120],
+  ];
+
+  const params=new URLSearchParams(location.search);
+  const MODE=params.get('mode')==='pvp'?'pvp':'cpu';
+
+  // ---------- 効果音（親アプリの「おと OFF」と連動：BQ_INIT で mute を うけとる） ----------
+  let AC=null, MUTED=false;
+  function beep(f,d=.12,type="sine"){
+    if(MUTED)return;
+    try{
+      AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+      const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+      g.gain.setValueAtTime(.15,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+      o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);
+    }catch(e){}
+  }
+  const sPlace=()=>beep(520,.08);
+  const sPass=()=>beep(300,.16,"triangle");
+  const sFanfare=()=>{beep(660,.12);setTimeout(()=>beep(880,.12),120);setTimeout(()=>beep(1320,.3),240);setTimeout(()=>beep(1760,.35),430);};
+  const sConsolation=()=>{beep(320,.2,"triangle");setTimeout(()=>beep(240,.3,"triangle"),180);};
+
+  // ── 親ウィンドウ（べんきょうクエスト本体）との連携 ──
+  window.addEventListener('message',e=>{ if(e.data&&e.data.type==='BQ_INIT'){ MUTED=!!e.data.mute; } });
+  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:'BQ_READY'},'*'); }catch(e){}
+  function notifyParentGameOver(){
+    try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:'BQ_GAME_OVER',game:'othello'},'*'); }catch(e){}
+  }
+
+  // ---------- オセロ ロジック ----------
+  function makeInitialBoard(){
+    const b=Array.from({length:8},()=>Array(8).fill(EMPTY));
+    b[3][3]=WHITE; b[3][4]=BLACK; b[4][3]=BLACK; b[4][4]=WHITE;
+    return b;
+  }
+  function inB(r,c){return r>=0&&r<8&&c>=0&&c<8;}
+  function opp(c){return c===BLACK?WHITE:BLACK;}
+  function flipsFor(board,r,c,color){
+    if(board[r][c]!==EMPTY)return null;
+    const oc=opp(color);
+    let all=[];
+    for(const [dr,dc] of DIRS){
+      let rr=r+dr,cc=c+dc;const line=[];
+      while(inB(rr,cc)&&board[rr][cc]===oc){line.push([rr,cc]);rr+=dr;cc+=dc;}
+      if(line.length&&inB(rr,cc)&&board[rr][cc]===color)all=all.concat(line);
+    }
+    return all.length?all:null;
+  }
+  function legalMoves(board,color){
+    const moves=[];
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const fl=flipsFor(board,r,c,color);
+      if(fl)moves.push({r,c,flips:fl});
+    }
+    return moves;
+  }
+  function applyMove(board,mv,color){
+    board[mv.r][mv.c]=color;
+    mv.flips.forEach(([r,c])=>board[r][c]=color);
+  }
+  function cloneBoard(b){return b.map(row=>row.slice());}
+  function countPieces(board){
+    let b=0,w=0;
+    for(const row of board)for(const v of row){if(v===BLACK)b++;else if(v===WHITE)w++;}
+    return {black:b,white:w};
+  }
+  function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+  // ---------- AI ----------
+  function evalBoard(board,rootColor){
+    let score=0;
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      if(board[r][c]===rootColor)score+=WEIGHTS[r][c];
+      else if(board[r][c]===opp(rootColor))score-=WEIGHTS[r][c];
+    }
+    const my=legalMoves(board,rootColor).length;
+    const op=legalMoves(board,opp(rootColor)).length;
+    score+=(my-op)*8;
+    return score;
+  }
+  function minimax(board,color,depth,alpha,beta,rootColor){
+    const moves=legalMoves(board,color);
+    if(moves.length===0){
+      const oppMoves=legalMoves(board,opp(color));
+      if(oppMoves.length===0){
+        const cnt=countPieces(board);
+        const diff=(rootColor===BLACK?cnt.black-cnt.white:cnt.white-cnt.black);
+        return diff*1000;
+      }
+      if(depth===0)return evalBoard(board,rootColor);
+      return minimax(board,opp(color),depth-1,alpha,beta,rootColor);
+    }
+    if(depth===0)return evalBoard(board,rootColor);
+    const maximizing=color===rootColor;
+    let best=maximizing?-Infinity:Infinity;
+    for(const mv of moves){
+      const nb=cloneBoard(board);applyMove(nb,mv,color);
+      const val=minimax(nb,opp(color),depth-1,alpha,beta,rootColor);
+      if(maximizing){best=Math.max(best,val);alpha=Math.max(alpha,best);}
+      else{best=Math.min(best,val);beta=Math.min(beta,best);}
+      if(alpha>=beta)break;
+    }
+    return best;
+  }
+  function bestMoveMinimax(board,color,depth){
+    const moves=shuffleArr(legalMoves(board,color));
+    let best=null,bestVal=-Infinity,alpha=-Infinity,beta=Infinity;
+    for(const mv of moves){
+      const nb=cloneBoard(board);applyMove(nb,mv,color);
+      const val=minimax(nb,opp(color),depth-1,alpha,beta,color);
+      if(val>bestVal){bestVal=val;best=mv;}
+      alpha=Math.max(alpha,bestVal);
+    }
+    return best;
+  }
+  function pickAIMove(board,color,level){
+    const moves=legalMoves(board,color);
+    if(!moves.length)return null;
+    if(level===1)return moves[(Math.random()*moves.length)|0];
+    if(level===2){
+      const scored=moves.map(mv=>({mv,val:mv.flips.length*10+WEIGHTS[mv.r][mv.c]}));
+      scored.sort((a,b)=>b.val-a.val);
+      const top=scored.filter(s=>s.val>=scored[0].val-5);
+      return top[(Math.random()*top.length)|0].mv;
+    }
+    return bestMoveMinimax(board,color,4);
+  }
+
+  // ---------- ゲーム状態 ----------
+  let board=null, turn=BLACK, aiLevel=null, matchOver=false;
+  let cellEls=[], prevBoard=null, timerId=null;
+
+  function buildBoardDom(){
+    const boardEl=document.getElementById('board');
+    boardEl.innerHTML='';
+    cellEls=[];
+    for(let r=0;r<8;r++){
+      const row=[];
+      for(let c=0;c<8;c++){
+        const d=document.createElement('div');
+        d.className='cell';d.dataset.r=r;d.dataset.c=c;
+        boardEl.appendChild(d);
+        row.push(d);
+      }
+      cellEls.push(row);
+    }
+    prevBoard=null;
+  }
+
+  function toast(msg,ms){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.classList.remove('hidden');
+    clearTimeout(t._timer);
+    t._timer=setTimeout(()=>t.classList.add('hidden'),ms||1300);
+  }
+
+  function syncBoardDom(){
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const v=board[r][c];
+      if(prevBoard&&prevBoard[r][c]===v)continue;
+      cellEls[r][c].innerHTML = v===EMPTY?'':`<div class="piece ${v===BLACK?'black':'white'}"></div>`;
+    }
+    prevBoard=cloneBoard(board);
+  }
+
+  function render(){
+    const cnt=countPieces(board);
+    document.getElementById('scoreBlack').textContent='⚫ '+cnt.black;
+    document.getElementById('scoreWhite').textContent='⚪ '+cnt.white;
+    const pill=document.getElementById('turnPill');
+    pill.textContent = turn===BLACK?'⚫ くろの ばん':'⚪ しろの ばん';
+    pill.className='turnpill '+(turn===BLACK?'black':'white');
+    syncBoardDom();
+    const interactive=!matchOver && !(MODE==='cpu'&&turn===AI_COLOR);
+    const hintSet=new Set((interactive?legalMoves(board,turn):[]).map(m=>m.r+'_'+m.c));
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      cellEls[r][c].classList.toggle('hint', board[r][c]===EMPTY && hintSet.has(r+'_'+c));
+    }
+  }
+
+  function setTimerRowVisible(v){
+    document.getElementById('timerRow').style.visibility=v?'visible':'hidden';
+  }
+  function showThinking(v){
+    document.getElementById('thinking').classList.toggle('hidden',!v);
+  }
+  function stopTimer(){if(timerId){clearInterval(timerId);timerId=null;}}
+  function startTimer(sec,enforcePass){
+    stopTimer();
+    const bar=document.getElementById('timeBar');
+    const label=document.getElementById('timeLabel');
+    const t0=Date.now();
+    bar.style.width='100%';bar.style.background='#3ecf8e';label.textContent=sec;
+    timerId=setInterval(()=>{
+      const elapsed=(Date.now()-t0)/1000;
+      const r=1-elapsed/sec;
+      if(r<=0){
+        bar.style.width='0%';label.textContent='0';
+        stopTimer();
+        onTimeExpire(enforcePass);
+        return;
+      }
+      bar.style.width=(r*100)+'%';
+      bar.style.background=r>.5?'#3ecf8e':r>.25?'#ffc53d':'#ff7a7a';
+      label.textContent=Math.ceil(sec-elapsed);
+    },100);
+  }
+  function onTimeExpire(enforcePass){
+    if(matchOver)return;
+    if(enforcePass){
+      sPass();
+      toast('⏰ じかんぎれ… パス！');
+      turn=opp(turn);
+      setTimeout(advanceTurn,900);
+    }else{
+      toast('⏰ じかんぎれ！でも まだ うてるよ',1400);
+    }
+  }
+
+  function advanceTurn(){
+    if(matchOver)return;
+    const moves=legalMoves(board,turn);
+    if(moves.length===0){
+      const otherMoves=legalMoves(board,opp(turn));
+      render();
+      if(otherMoves.length===0){ endMatch(); return; }
+      sPass();
+      toast(`${turn===BLACK?'⚫くろ':'⚪しろ'}は うてる ところが ないよ。パス！`);
+      turn=opp(turn);
+      setTimeout(advanceTurn,1100);
+      return;
+    }
+    render();
+    if(MODE==='cpu'&&turn===AI_COLOR){
+      stopTimer();setTimerRowVisible(false);showThinking(true);
+      setTimeout(()=>{
+        if(matchOver)return;
+        showThinking(false);
+        const mv=pickAIMove(board,turn,aiLevel);
+        doMove(mv);
+      },600+Math.random()*500);
+    }else{
+      showThinking(false);setTimerRowVisible(true);
+      startTimer(TIME_LIMIT,MODE==='cpu');
+    }
+  }
+  function doMove(mv){
+    if(!mv||matchOver)return;
+    stopTimer();
+    applyMove(board,mv,turn);
+    sPlace();
+    turn=opp(turn);
+    setTimeout(advanceTurn,150);
+  }
+  function handleCellClick(r,c){
+    if(matchOver)return;
+    if(MODE==='cpu'&&turn===AI_COLOR)return;
+    const mv=legalMoves(board,turn).find(m=>m.r===r&&m.c===c);
+    if(!mv)return;
+    doMove(mv);
+  }
+
+  function endMatch(){
+    matchOver=true;stopTimer();
+    render();
+    const cnt=countPieces(board);
+    let resultText,winSound=true;
+    if(cnt.black===cnt.white){resultText='🤝 ひきわけ！';}
+    else{
+      const winner=cnt.black>cnt.white?BLACK:WHITE;
+      if(MODE==='cpu'){
+        if(winner===HUMAN_COLOR)resultText='🎉 あなたの かち！';
+        else{resultText='😢 コンピュータの かち…';winSound=false;}
+      }else{
+        resultText=winner===BLACK?'⚫ くろの かち！':'⚪ しろの かち！';
+      }
+    }
+    document.getElementById('resultText').textContent=resultText;
+    document.getElementById('resultSub').textContent=`⚫${cnt.black} － ⚪${cnt.white}`;
+    document.getElementById('result-screen').classList.remove('hidden');
+    if(winSound)sFanfare();else sConsolation();
+    setTimeout(notifyParentGameOver,1100);
+  }
+
+  function newMatch(level){
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('result-screen').classList.add('hidden');
+    document.getElementById('game-screen').style.display='block';
+    board=makeInitialBoard();
+    turn=BLACK;aiLevel=level;matchOver=false;
+    buildBoardDom();
+    advanceTurn();
+  }
+
+  function buildStartScreen(){
+    const el=document.getElementById('start-screen');
+    if(MODE==='pvp'){
+      el.innerHTML=`
+        <div style="font-size:54px;margin-bottom:6px">⚫⚪</div>
+        <h1 class="title">オセロ（ふたりで）</h1>
+        <p class="sub">⚫くろ → ⚪しろの じゅんばんに こうたいで うつよ。<br>
+          はさんだ あいてのコマが ぜんぶ じぶんの いろに かわるよ。<br>
+          うてる ますが なくなったら、コマの おおいほうの かち！</p>
+        <button class="btn" id="beginBtn">はじめる</button>`;
+      document.getElementById('beginBtn').onclick=()=>newMatch(null);
+    }else{
+      el.innerHTML=`
+        <div style="font-size:54px;margin-bottom:6px">⚫⚪</div>
+        <h1 class="title">オセロ</h1>
+        <p class="sub">あなたは ⚫くろ。コンピュータは ⚪しろだよ。<br>
+          はさんだ あいてのコマが ぜんぶ じぶんの いろに かわるよ。<br>
+          うてる ますが なくなったら、コマの おおいほうの かち！</p>
+        <button class="lvbtn" data-lv="1"><b>🐣 よわい</b><small>のんびり かんがえるよ</small></button>
+        <button class="lvbtn" data-lv="2"><b>🐥 ふつう</b><small>ちょっと つよいよ</small></button>
+        <button class="lvbtn" data-lv="3"><b>🦅 つよい</b><small>ぜんりょくで くるよ！</small></button>`;
+      el.querySelectorAll('.lvbtn').forEach(b=>b.onclick=()=>newMatch(+b.dataset.lv));
+    }
+  }
+
+  buildStartScreen();
+  buildBoardDom();
+  document.getElementById('board').addEventListener('click',e=>{
+    const el=e.target.closest('.cell');if(!el)return;
+    handleCellClick(+el.dataset.r,+el.dataset.c);
+  });
+})();
+</script>
+</body>
+</html>

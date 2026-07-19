@@ -40,12 +40,18 @@
    ぶつりラボは学習用シミュレーションのため対象外（チケット不要・回数制限なし）。
  ■ ゲームを追加するには:
    1) games/xxx.html として1ファイルで完結するゲームを作る（見た目・操作・スコア表示すべて内包）
-   2) js/app.js の EXTRA_GAMES に {title, emoji, src:'games/xxx.html'} を追加（iframeで開く）
+   2) js/app.js の EXTRA_GAMES に {title, emoji, src:'games/xxx.html', cost:まい数} を追加（iframeで開く）
+      cost は省略時1。0を指定すると「🎟️不要」表示になりチケット消費なしで遊べる
+      （対人プレイ専用の入口を cost:0 の別エントリとして追加する形で使う。
+       例: オセロ/どうぶつしょうぎは 同じHTMLを ?mode=cpu（cost:3）と ?mode=pvp（cost:0）の
+       2エントリで登録し、どちらのURLで開かれたかをゲーム側がクエリ文字列で判定する）
    ※ ゲーム側は「本当のゲームオーバー」の瞬間に
       window.parent.postMessage({type:'BQ_GAME_OVER', game:'xxx'}, '*')
       を送る必要がある（openExt() がこれを受け取って その回を おしまいにする）。
       内部ライフ制のゲーム（マリオ風など）は内部ライフが尽きた「本当の」ゲームオーバーの
       タイミングでのみ送ること（一時的な被弾/ミスでは送らない）。
+      オセロ/どうぶつしょうぎのような対局ゲームは 1回の対局が終わった瞬間（勝敗確定）が
+      「本当のゲームオーバー」にあたる。
  ■ ぶつりラボにシミュレーションを追加するには:
    1) physics/xxx.html として1ファイルで完結するシミュレーションを作る
    2) js/app.js の PHYSICS_SIMS に {title, emoji, tag, src:'physics/xxx.html'} を追加（iframeで開く）

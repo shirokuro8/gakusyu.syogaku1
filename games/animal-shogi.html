@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>どうぶつしょうぎ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;min-height:100%;overflow-x:hidden;overflow-y:auto;
+    background:linear-gradient(#fdf3e0,#f6e3c2);
+    font-family:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Yu Gothic UI','Yu Gothic','Meiryo',system-ui,sans-serif;
+    color:#4a3a2a;overscroll-behavior:none;user-select:none;touch-action:manipulation;}
+  #app{max-width:460px;margin:0 auto;padding:12px 12px 22px;min-height:100vh;position:relative;}
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;overflow-y:auto;
+    background:radial-gradient(ellipse at 50% 20%,#fff8ecf5,#f3e2c4f5 70%);
+    transition:opacity .25s,visibility .25s;}
+  .overlay.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .title{font-weight:800;font-size:26px;margin:0 0 8px;}
+  .sub{font-size:14px;color:#7a6248;font-weight:700;margin:0 0 18px;max-width:340px;line-height:1.8;}
+  .btn{font-family:inherit;font-weight:800;font-size:18px;color:#fff;
+    background:linear-gradient(135deg,#ff9d4d,#f2722f);border:none;border-radius:999px;
+    padding:14px 34px;box-shadow:0 6px 0 #b8481f,0 8px 16px rgba(242,114,47,.3);cursor:pointer;margin:6px;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #b8481f;}
+  .lvbtn{display:block;width:100%;max-width:320px;text-align:left;background:#fff;border:none;border-radius:18px;
+    padding:12px 18px;margin:7px 0;box-shadow:0 4px 10px rgba(120,80,40,.14);font-family:inherit;cursor:pointer;}
+  .lvbtn b{display:block;font-size:18px;color:#4a3a2a;}
+  .lvbtn small{color:#8a7156;font-weight:700;font-size:12.5px;}
+  .lvbtn:active{transform:scale(.97);}
+  #game-screen{display:none;}
+  .topbar{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+  .turnpill{text-align:center;font-weight:800;font-size:15px;background:#fff;border-radius:999px;
+    padding:8px 16px;box-shadow:0 3px 8px rgba(120,80,40,.14);transition:background .2s,color .2s;}
+  .turnpill.own1{background:#e8542c;color:#fff;}
+  .turnpill.own2{background:#2f7fd6;color:#fff;}
+  .timerrow{display:flex;align-items:center;gap:8px;margin-bottom:8px;height:22px;}
+  .timerbar{flex:1;height:12px;background:#e6d3b3;border-radius:99px;overflow:hidden;}
+  .timerbar i{display:block;height:100%;width:100%;background:#3ecf8e;transition:width .1s linear,background .3s;}
+  .timenum{font-weight:800;font-size:14px;min-width:22px;text-align:right;}
+  .thinking{text-align:center;font-weight:800;font-size:14px;color:#7a6248;margin-bottom:8px;height:22px;}
+  .thinking.hidden{visibility:hidden;}
+  .handrow{display:flex;justify-content:center;gap:10px;margin:6px auto;}
+  .handpiece{position:relative;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:26px;
+    box-shadow:0 3px 6px rgba(120,80,40,.18);transition:transform .12s,opacity .2s;}
+  .handpiece.owner1{background:linear-gradient(160deg,#ffb27a,#e8542c);}
+  .handpiece.owner2{background:linear-gradient(160deg,#8fd0ff,#2f7fd6);}
+  .handpiece.empty{opacity:.28;pointer-events:none;}
+  .handpiece.sel{outline:4px solid #ffd23d;outline-offset:2px;transform:scale(1.08);}
+  .handpiece:active:not(.empty){transform:scale(.94);}
+  .hp-n{position:absolute;bottom:-4px;right:-4px;background:#fff;color:#4a3a2a;font-size:11px;font-weight:800;
+    border-radius:99px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 3px rgba(0,0,0,.25);padding:0 2px;}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);gap:5px;
+    background:#c9964f;border-radius:14px;padding:8px;box-shadow:0 6px 16px rgba(120,80,40,.25);
+    width:100%;max-width:280px;aspect-ratio:3/4;margin:4px auto;}
+  .cell{position:relative;background:#e8c891;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .cell.hint::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:28%;height:28%;border-radius:50%;background:rgba(60,207,142,.7);pointer-events:none;z-index:2;}
+  .cell.hint{box-shadow:inset 0 0 0 3px rgba(62,207,142,.55);}
+  .cell.sel{box-shadow:inset 0 0 0 3px #ffd23d;}
+  .piece{width:86%;height:86%;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:1.6rem;box-shadow:0 3px 5px rgba(0,0,0,.3);}
+  .piece.owner1{background:linear-gradient(160deg,#ffb27a,#e8542c);}
+  .piece.owner2{background:linear-gradient(160deg,#8fd0ff,#2f7fd6);}
+  .hint-text{text-align:center;font-weight:700;color:#8a7156;font-size:12px;margin-top:8px;line-height:1.6;}
+  .toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:30;
+    background:#4a3a2a;color:#fff;font-weight:800;font-size:14px;padding:10px 18px;border-radius:99px;
+    box-shadow:0 6px 14px rgba(0,0,0,.25);transition:opacity .25s,visibility .25s;text-align:center;max-width:88vw;}
+  .toast.hidden{opacity:0;visibility:hidden;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="game-screen">
+    <div class="handrow" id="handP2"></div>
+    <div class="topbar"><div class="turnpill own1" id="turnPill">🔴 あかの ばん</div></div>
+    <div class="timerrow" id="timerRow">
+      <div class="timerbar"><i id="timeBar"></i></div>
+      <div class="timenum" id="timeLabel">20</div>
+    </div>
+    <div class="thinking hidden" id="thinking">🤔 コンピュータが かんがえちゅう…</div>
+    <div class="board" id="board"></div>
+    <div class="handrow" id="handP1"></div>
+    <div class="hint-text">こまか もちごまを タップ → すすめる ますを タップ！</div>
+  </div>
+</div>
+
+<div id="start-screen" class="overlay"></div>
+<div id="result-screen" class="overlay hidden">
+  <div style="font-size:54px" id="resultEmoji">🏆</div>
+  <h1 class="title" id="resultText"></h1>
+  <p class="sub" id="resultSub" style="font-size:16px"></p>
+</div>
+<div class="toast hidden" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const HUMAN_OWNER=1, AI_OWNER=2;
+  const TIME_LIMIT=20;
+  const VAL={C:2,G:5,Z:4,H:7};
+
+  const params=new URLSearchParams(location.search);
+  const MODE=params.get('mode')==='pvp'?'pvp':'cpu';
+
+  // ---------- 効果音 ----------
+  let AC=null, MUTED=false;
+  function beep(f,d=.12,type="sine"){
+    if(MUTED)return;
+    try{
+      AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+      const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+      g.gain.setValueAtTime(.15,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+      o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d);
+    }catch(e){}
+  }
+  const sMove=()=>beep(500,.08);
+  const sCapture=()=>{beep(420,.08);setTimeout(()=>beep(620,.1),60);};
+  const sPass=()=>beep(300,.16,"triangle");
+  const sFanfare=()=>{beep(660,.12);setTimeout(()=>beep(880,.12),120);setTimeout(()=>beep(1320,.3),240);setTimeout(()=>beep(1760,.35),430);};
+  const sConsolation=()=>{beep(320,.2,"triangle");setTimeout(()=>beep(240,.3,"triangle"),180);};
+
+  window.addEventListener('message',e=>{ if(e.data&&e.data.type==='BQ_INIT'){ MUTED=!!e.data.mute; } });
+  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:'BQ_READY'},'*'); }catch(e){}
+  function notifyParentGameOver(){
+    try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:'BQ_GAME_OVER',game:'animal-shogi'},'*'); }catch(e){}
+  }
+
+  // ---------- どうぶつしょうぎ ロジック ----------
+  // 盤は 4行(row0=上/あお陣, row3=下/あか陣) x 3列。owner1=あか(した/せんて), owner2=あお(うえ/ごて)
+  function inBoard(r,c){return r>=0&&r<4&&c>=0&&c<3;}
+  function opp(o){return o===1?2:1;}
+  const DIR_L=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const DIR_G=[[-1,0],[1,0],[0,-1],[0,1]];
+  const DIR_Z=[[-1,-1],[-1,1],[1,-1],[1,1]];
+  function pieceDirs(type,owner){
+    const fwd=owner===1?-1:1;
+    if(type==='L')return DIR_L;
+    if(type==='G')return DIR_G;
+    if(type==='Z')return DIR_Z;
+    if(type==='C')return [[fwd,0]];
+    if(type==='H')return [[fwd,-1],[fwd,0],[fwd,1],[0,-1],[0,1],[-fwd,0]];
+    return [];
+  }
+  function makeInitialBoard(){
+    const b=Array.from({length:4},()=>Array(3).fill(null));
+    b[0][0]={type:'G',owner:2}; b[0][1]={type:'L',owner:2}; b[0][2]={type:'Z',owner:2};
+    b[1][1]={type:'C',owner:2};
+    b[2][1]={type:'C',owner:1};
+    b[3][0]={type:'Z',owner:1}; b[3][1]={type:'L',owner:1}; b[3][2]={type:'G',owner:1};
+    return b;
+  }
+  function pieceMoves(board,r,c){
+    const p=board[r][c]; if(!p)return [];
+    const dirs=pieceDirs(p.type,p.owner);
+    const moves=[];
+    for(const [dr,dc] of dirs){
+      const nr=r+dr,nc=c+dc;
+      if(!inBoard(nr,nc))continue;
+      const t=board[nr][nc];
+      if(t&&t.owner===p.owner)continue;
+      moves.push({kind:'move',owner:p.owner,from:[r,c],to:[nr,nc],capture:!!t});
+    }
+    return moves;
+  }
+  function legalActions(board,hand,owner){
+    const actions=[];
+    for(let r=0;r<4;r++)for(let c=0;c<3;c++){
+      const p=board[r][c];
+      if(p&&p.owner===owner) actions.push(...pieceMoves(board,r,c));
+    }
+    const lastRow=owner===1?0:3;
+    const h=hand[owner]||{};
+    ['G','Z','C'].forEach(t=>{
+      if((h[t]||0)<=0)return;
+      for(let r=0;r<4;r++)for(let c=0;c<3;c++){
+        if(board[r][c])continue;
+        if(t==='C'&&r===lastRow)continue; // ひよこは すすめなくなる さいごの列には打てない
+        actions.push({kind:'drop',owner,type:t,to:[r,c]});
+      }
+    });
+    return actions;
+  }
+  function cloneState(state){
+    return {
+      board: state.board.map(row=>row.map(p=>p?{type:p.type,owner:p.owner}:null)),
+      hand: {1:Object.assign({},state.hand[1]),2:Object.assign({},state.hand[2])}
+    };
+  }
+  function doAction(state,action){
+    const owner=action.owner;
+    if(action.kind==='move'){
+      const [fr,fc]=action.from,[tr,tc]=action.to;
+      const p=state.board[fr][fc];
+      const target=state.board[tr][tc];
+      let capturedType=null;
+      if(target){
+        capturedType=target.type;
+        const base=target.type==='H'?'C':target.type;
+        if(base!=='L') state.hand[owner][base]=(state.hand[owner][base]||0)+1;
+      }
+      state.board[fr][fc]=null;
+      const promoRow=owner===1?0:3;
+      let newType=p.type;
+      if(p.type==='C'&&tr===promoRow)newType='H';
+      state.board[tr][tc]={type:newType,owner};
+      if(capturedType==='L') return {winner:owner,reason:'capture',capturedType};
+      if(p.type==='L'&&tr===promoRow) return {winner:owner,reason:'try',capturedType};
+      return {winner:null,capturedType};
+    }else{
+      state.hand[owner][action.type]=(state.hand[owner][action.type]||0)-1;
+      state.board[action.to[0]][action.to[1]]={type:action.type,owner};
+      return {winner:null,capturedType:null};
+    }
+  }
+
+  // ---------- AI ----------
+  function evalState(state,rootOwner){
+    let score=0;
+    for(let r=0;r<4;r++)for(let c=0;c<3;c++){
+      const p=state.board[r][c]; if(!p||p.type==='L')continue;
+      const v=VAL[p.type]+(c===1?0.5:0);
+      score += p.owner===rootOwner? v : -v;
+    }
+    const h1=state.hand[rootOwner]||{}, h2=state.hand[opp(rootOwner)]||{};
+    for(const t in h1) score += (h1[t]||0)*(VAL[t]||0)*0.8;
+    for(const t in h2) score -= (h2[t]||0)*(VAL[t]||0)*0.8;
+    const myMob=legalActions(state.board,state.hand,rootOwner).length;
+    const opMob=legalActions(state.board,state.hand,opp(rootOwner)).length;
+    score += (myMob-opMob)*0.3;
+    return score;
+  }
+  function minimaxAS(state,owner,depth,alpha,beta,rootOwner){
+    const actions=legalActions(state.board,state.hand,owner);
+    if(actions.length===0) return owner===rootOwner? -90000 : 90000;
+    if(depth===0) return evalState(state,rootOwner);
+    actions.sort((a,b)=>(b.capture?1:0)-(a.capture?1:0));
+    const maximizing=owner===rootOwner;
+    let best=maximizing?-Infinity:Infinity;
+    for(const act of actions){
+      const ns=cloneState(state);
+      const res=doAction(ns,act);
+      let val;
+      if(res.winner) val = res.winner===rootOwner? 90000+depth : -90000-depth;
+      else val = minimaxAS(ns,opp(owner),depth-1,alpha,beta,rootOwner);
+      if(maximizing){best=Math.max(best,val);alpha=Math.max(alpha,best);}
+      else{best=Math.min(best,val);beta=Math.min(beta,best);}
+      if(alpha>=beta)break;
+    }
+    return best;
+  }
+  function bestMoveAS(state,owner,depth){
+    const actions=shuffleArr(legalActions(state.board,state.hand,owner));
+    let best=null,bestVal=-Infinity,alpha=-Infinity,beta=Infinity;
+    for(const act of actions){
+      const ns=cloneState(state);
+      const res=doAction(ns,act);
+      let val;
+      if(res.winner) val = res.winner===owner? 90000+depth : -90000-depth;
+      else val = minimaxAS(ns,opp(owner),depth-1,alpha,beta,owner);
+      if(val>bestVal){bestVal=val;best=act;}
+      alpha=Math.max(alpha,bestVal);
+    }
+    return best;
+  }
+  function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+  function pickASMove(state,owner,level){
+    const actions=legalActions(state.board,state.hand,owner);
+    if(!actions.length)return null;
+    if(level===1) return actions[(Math.random()*actions.length)|0];
+    if(level===2){
+      const scored=actions.map(act=>{
+        const ns=cloneState(state);
+        const res=doAction(ns,act);
+        let v=0;
+        if(res.winner===owner) v=100000;
+        else if(res.capturedType) v=(VAL[res.capturedType]||0)*10 + (act.kind==='move'&&act.to[1]===1?1:0);
+        else v=(act.kind==='move'&&act.to[1]===1?1:0);
+        return {act,v};
+      });
+      scored.sort((a,b)=>b.v-a.v);
+      const top=scored.filter(s=>s.v>=scored[0].v-1);
+      return top[(Math.random()*top.length)|0].act;
+    }
+    return bestMoveAS(state,owner,4);
+  }
+
+  // ---------- ゲーム状態 ----------
+  let board=null, hand=null, turn=1, aiLevel=null, matchOver=false, selected=null;
+  let cellEls=[], timerId=null;
+
+  function buildBoardDom(){
+    const boardEl=document.getElementById('board');
+    boardEl.innerHTML='';
+    cellEls=[];
+    for(let r=0;r<4;r++){
+      const row=[];
+      for(let c=0;c<3;c++){
+        const d=document.createElement('div');
+        d.className='cell';d.dataset.r=r;d.dataset.c=c;
+        boardEl.appendChild(d);
+        row.push(d);
+      }
+      cellEls.push(row);
+    }
+  }
+
+  function toast(msg,ms){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.classList.remove('hidden');
+    clearTimeout(t._timer);
+    t._timer=setTimeout(()=>t.classList.add('hidden'),ms||1300);
+  }
+
+  function pieceIcon(type){return {L:'🦁',G:'🦒',Z:'🐘',C:'🐥',H:'🐔'}[type];}
+
+  function currentLegalDestinations(){
+    if(!selected||matchOver)return [];
+    const actions=legalActions(board,hand,turn);
+    if(selected.kind==='board'){
+      return actions.filter(a=>a.kind==='move'&&a.from[0]===selected.r&&a.from[1]===selected.c);
+    }
+    return actions.filter(a=>a.kind==='drop'&&a.type===selected.type);
+  }
+
+  function renderHandRow(owner){
+    const el=document.getElementById(owner===1?'handP1':'handP2');
+    const h=hand[owner]||{};
+    const icons={G:'🦒',Z:'🐘',C:'🐥'};
+    let html='';
+    ['G','Z','C'].forEach(t=>{
+      const n=h[t]||0;
+      const sel = selected&&selected.kind==='hand'&&selected.type===t&&turn===owner;
+      html+=`<button class="handpiece owner${owner} ${n>0?'':'empty'} ${sel?'sel':''}" data-owner="${owner}" data-type="${t}">
+        <span>${icons[t]}</span>${n>1?`<span class="hp-n">${n}</span>`:''}</button>`;
+    });
+    el.innerHTML=html;
+  }
+
+  function render(){
+    const pill=document.getElementById('turnPill');
+    pill.textContent = turn===1?'🔴 あかの ばん':'🔵 あおの ばん';
+    pill.className='turnpill own'+turn;
+    const dests=currentLegalDestinations();
+    const destSet=new Set(dests.map(a=>a.to[0]+'_'+a.to[1]));
+    for(let r=0;r<4;r++)for(let c=0;c<3;c++){
+      const el=cellEls[r][c];
+      const p=board[r][c];
+      const isSel = selected&&selected.kind==='board'&&selected.r===r&&selected.c===c;
+      el.className='cell'+(destSet.has(r+'_'+c)?' hint':'')+(isSel?' sel':'');
+      el.innerHTML = p? `<div class="piece owner${p.owner}"><span>${pieceIcon(p.type)}</span></div>` : '';
+    }
+    renderHandRow(1);
+    renderHandRow(2);
+  }
+
+  function interactiveNow(){
+    return !matchOver && !(MODE==='cpu'&&turn===AI_OWNER);
+  }
+
+  function onBoardCellClick(r,c){
+    if(!interactiveNow())return;
+    if(selected){
+      const dests=currentLegalDestinations();
+      const hit=dests.find(a=>a.to[0]===r&&a.to[1]===c);
+      if(hit){ selected=null; doAct(hit); return; }
+    }
+    const p=board[r][c];
+    if(p&&p.owner===turn){
+      selected = (selected&&selected.kind==='board'&&selected.r===r&&selected.c===c)? null : {kind:'board',r,c};
+    }else{
+      selected=null;
+    }
+    render();
+  }
+  function onHandPieceClick(owner,type){
+    if(!interactiveNow())return;
+    if(owner!==turn)return;
+    if((hand[owner][type]||0)<=0)return;
+    selected = (selected&&selected.kind==='hand'&&selected.type===type)? null : {kind:'hand',type};
+    render();
+  }
+
+  function doAct(action){
+    stopTimer();
+    const res=doAction({board,hand},action);
+    if(res.capturedType) sCapture(); else sMove();
+    if(res.winner){
+      render();
+      setTimeout(()=>endMatch(res.winner,res.reason),200);
+      return;
+    }
+    turn=opp(turn);
+    setTimeout(advanceTurn,150);
+  }
+
+  function setTimerRowVisible(v){document.getElementById('timerRow').style.visibility=v?'visible':'hidden';}
+  function showThinking(v){document.getElementById('thinking').classList.toggle('hidden',!v);}
+  function stopTimer(){if(timerId){clearInterval(timerId);timerId=null;}}
+  function startTimer(sec,enforcePass){
+    stopTimer();
+    const bar=document.getElementById('timeBar');
+    const label=document.getElementById('timeLabel');
+    const t0=Date.now();
+    bar.style.width='100%';bar.style.background='#3ecf8e';label.textContent=sec;
+    timerId=setInterval(()=>{
+      const elapsed=(Date.now()-t0)/1000;
+      const r=1-elapsed/sec;
+      if(r<=0){
+        bar.style.width='0%';label.textContent='0';
+        stopTimer();
+        onTimeExpire(enforcePass);
+        return;
+      }
+      bar.style.width=(r*100)+'%';
+      bar.style.background=r>.5?'#3ecf8e':r>.25?'#ffc53d':'#ff7a7a';
+      label.textContent=Math.ceil(sec-elapsed);
+    },100);
+  }
+  function onTimeExpire(enforcePass){
+    if(matchOver)return;
+    if(enforcePass){
+      sPass();
+      toast('⏰ じかんぎれ… パス！');
+      selected=null;
+      turn=opp(turn);
+      setTimeout(advanceTurn,900);
+    }else{
+      toast('⏰ じかんぎれ！でも まだ うごかせるよ',1400);
+    }
+  }
+
+  function advanceTurn(){
+    if(matchOver)return;
+    selected=null;
+    const actions=legalActions(board,hand,turn);
+    if(actions.length===0){
+      render();
+      endMatch(opp(turn),'nomove');
+      return;
+    }
+    render();
+    if(MODE==='cpu'&&turn===AI_OWNER){
+      stopTimer();setTimerRowVisible(false);showThinking(true);
+      setTimeout(()=>{
+        if(matchOver)return;
+        showThinking(false);
+        const act=pickASMove({board,hand},turn,aiLevel);
+        doAct(act);
+      },600+Math.random()*500);
+    }else{
+      showThinking(false);setTimerRowVisible(true);
+      startTimer(TIME_LIMIT,MODE==='cpu');
+    }
+  }
+
+  function endMatch(winnerOwner,reason){
+    matchOver=true;stopTimer();
+    render();
+    let resultText,resultSub,winSound=true;
+    const reasonText = reason==='capture'?'🦁 ライオンを つかまえたよ！'
+      : reason==='try'?'🦁 ライオンが てきじんに とうちゃくしたよ！'
+      : 'うごかせる こまが ないよ…';
+    if(MODE==='cpu'){
+      if(winnerOwner===HUMAN_OWNER) resultText='🎉 あなたの かち！';
+      else{resultText='😢 コンピュータの かち…';winSound=false;}
+    }else{
+      resultText = winnerOwner===1?'🔴 あかの かち！':'🔵 あおの かち！';
+    }
+    resultSub=reasonText;
+    document.getElementById('resultText').textContent=resultText;
+    document.getElementById('resultSub').textContent=resultSub;
+    document.getElementById('result-screen').classList.remove('hidden');
+    if(winSound)sFanfare();else sConsolation();
+    setTimeout(notifyParentGameOver,1100);
+  }
+
+  function newMatch(level){
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('result-screen').classList.add('hidden');
+    document.getElementById('game-screen').style.display='block';
+    board=makeInitialBoard();
+    hand={1:{G:0,Z:0,C:0},2:{G:0,Z:0,C:0}};
+    turn=1;aiLevel=level;matchOver=false;selected=null;
+    buildBoardDom();
+    advanceTurn();
+  }
+
+  function buildStartScreen(){
+    const el=document.getElementById('start-screen');
+    const rule=`🦁ライオンを つかまえるか、てきじんの さいごの れつまで すすめたら かち！<br>
+      🐥ひよこは まっすぐ すすんで、さいごの れつで 🐔にわとりに へんしんするよ。<br>
+      とった あいてのコマは じぶんのコマとして ばんに おけるよ！`;
+    if(MODE==='pvp'){
+      el.innerHTML=`
+        <div style="font-size:54px;margin-bottom:6px">🦁</div>
+        <h1 class="title">どうぶつしょうぎ（ふたりで）</h1>
+        <p class="sub">🔴あか（した）→ 🔵あお（うえ）の じゅんばんに こうたいで あそぶよ。<br>${rule}</p>
+        <button class="btn" id="beginBtn">はじめる</button>`;
+      document.getElementById('beginBtn').onclick=()=>newMatch(null);
+    }else{
+      el.innerHTML=`
+        <div style="font-size:54px;margin-bottom:6px">🦁</div>
+        <h1 class="title">どうぶつしょうぎ</h1>
+        <p class="sub">あなたは 🔴あか（した）。コンピュータは 🔵あお（うえ）だよ。<br>${rule}</p>
+        <button class="lvbtn" data-lv="1"><b>🐣 よわい</b><small>のんびり かんがえるよ</small></button>
+        <button class="lvbtn" data-lv="2"><b>🐥 ふつう</b><small>ちょっと つよいよ</small></button>
+        <button class="lvbtn" data-lv="3"><b>🦁 つよい</b><small>ぜんりょくで くるよ！</small></button>`;
+      el.querySelectorAll('.lvbtn').forEach(b=>b.onclick=()=>newMatch(+b.dataset.lv));
+    }
+  }
+
+  buildStartScreen();
+  buildBoardDom();
+  document.getElementById('board').addEventListener('click',e=>{
+    const el=e.target.closest('.cell');if(!el)return;
+    onBoardCellClick(+el.dataset.r,+el.dataset.c);
+  });
+  document.getElementById('handP1').addEventListener('click',e=>{
+    const el=e.target.closest('.handpiece');if(!el)return;
+    onHandPieceClick(+el.dataset.owner,el.dataset.type);
+  });
+  document.getElementById('handP2').addEventListener('click',e=>{
+    const el=e.target.closest('.handpiece');if(!el)return;
+    onHandPieceClick(+el.dataset.owner,el.dataset.type);
+  });
+})();
+</script>
+</body>
+</html>
