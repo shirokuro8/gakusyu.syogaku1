@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css">
+<script>window.LAB_WHY={q:"いしの うしろでは、みずの ながれは どう なると おもう？",try:"いしを うごかして、うずが できる ようすを みよう"};</script>
+<script src="_lab.js"></script>
 <style>
   body{user-select:none;touch-action:none}
   html,body{height:100%;overflow:hidden}
@@ -33,6 +35,7 @@
     <button class="focusable" id="btnClear">🧹 きれいに</button>
     <button class="focusable" id="btnBurst">💥 ばくはつ</button>
     <button class="focusable" id="btnVortex">🌀 うずをみる</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
   </div>
   <div class="sim-desc">ひだりから みぎへ、かぜが ずっと ふいているよ。がめんを ゆびで タップ・ドラッグすると「まる いし」を おける！ おいた ばしょで ながれが まがったり、うずを まいたり するのを かんさつしよう。「⚪おおきさ」で いしの おおきさ、「💨かぜ」で つよさを かえられるよ。「🌀うずをみる」を おすと、いしの うしろに かわりばんこに できる うずの れつが、あかと あおの もようで はっきり みえるよ。じつは これ、はしや えんとつの うしろに ほんとうに できる ゆうめいな なみもようなんだ。</div>
 </div>
@@ -149,6 +152,12 @@
   $("#btnBurst").onclick=burst;
   const btnVortex=$("#btnVortex");
   btnVortex.onclick=()=>{vortexMode=!vortexMode;btnVortex.classList.toggle("on",vortexMode);};
+  $("#btnReset").onclick=()=>{                         // かぜ・いし・ながれを さいしょに もどす
+    $("#windR").value=3.5; windSpeed=3.5*WIND_SCALE;
+    $("#sizeR").value=30; obRpx=30; obPx=W*0.4; obPy=H*0.5;
+    dR.fill(0);dG.fill(0);dB.fill(0);u.fill(0);v.fill(0);u0.fill(0);v0.fill(0);
+    if(vortexMode){vortexMode=false;btnVortex.classList.remove("on");}
+  };
 
   function frame(){
     tick++;

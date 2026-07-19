@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css">
+<script>window.LAB_WHY={q:"おとの たかさを かえると、すなの もようは どう かわると おもう？",try:"スライダーを うごかして たしかめよう"};</script>
+<script src="_lab.js"></script>
 <style>
   body{user-select:none;touch-action:none}
   html,body{height:100%;overflow:hidden}
@@ -27,6 +29,7 @@
   <div class="cv-wrap"><canvas id="view" class="playcv"></canvas></div>
   <div class="toolbar">
     <button class="focusable" id="btnSound">🔈 おとを ならす</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
   </div>
   <div class="toolbar">
     <label class="sliderline"><span>🎵 たての おと</span><input type="range" class="focusable" id="nR" min="1" max="8" step="1" value="1"></label>
@@ -83,6 +86,9 @@
     soundOn=false; btnSound.textContent="🔈 おとを ならす"; btnSound.classList.remove("on");
   }
   btnSound.addEventListener("click",()=>{ soundOn ? stopSound() : startSound(); });
+  document.getElementById("btnReset").addEventListener("click",()=>{  // もようを さいしょに もどす
+    nR.value=1; mR.value=2; volR.value=50; stopSound(); updateMode();
+  });
 
   function updateMode(){
     n=+nR.value; m=+mR.value; scatter();

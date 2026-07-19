@@ -62,9 +62,10 @@
 
   function R(n){return Math.floor(Math.random()*n);}
 
-  // ---------- 効果音 ----------
-  let AC=null;
+  // ---------- 効果音（親アプリの「おと OFF」と 連動：BQ_INIT で mute を うけとる） ----------
+  let AC=null, MUTED=false;
   function beep(f,d=.12,type="sine"){
+    if(MUTED)return;
     try{
       AC=AC||new (window.AudioContext||window.webkitAudioContext)();
       const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
@@ -88,7 +89,7 @@
   renderHiScores();
 
   // ── 親ウィンドウ（べんきょうクエスト本体）へ「本当のゲームオーバー」を通知 ──
-  // ゲームチケットのライフ制（1まいで3回まで）は親側で管理する
+  // ゲームチケット（1まい＝1プレイ）は親側で管理する
   function notifyParentGameOver(){
     try{
       if(window.parent && window.parent!==window){
@@ -96,6 +97,10 @@
       }
     }catch(e){}
   }
+
+  // ── 親アプリ（べんきょうクエスト）の おと設定を うけとって 一致させる ──
+  window.addEventListener('message',e=>{ if(e.data && e.data.type==='BQ_INIT'){ MUTED=!!e.data.mute; } });
+  try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'BQ_READY'},'*'); }catch(e){}
 
   // ---------- ゲーム本体 ----------
   let rocket={y:H/2,vy:0},gates=[],score=0,alive=false,started=false,frame=0;

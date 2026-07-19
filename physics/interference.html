@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css">
+<script>window.LAB_WHY={q:"ふたつの なみが かさなると、どんな もようが できると おもう？",try:"いしを 2つ・3つ おいて たしかめよう"};</script>
+<script src="_lab.js"></script>
 <style>
   body{user-select:none;touch-action:none}
   html,body{height:100%;overflow:hidden}
@@ -36,6 +38,7 @@
   </div>
   <div class="toolbar">
     <button class="focusable" id="btnClear">🧹 きれいに</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
   </div>
   <div class="sim-desc">がめんを タップすると、そこに いし を なげこんだ みたいに なみの わ が ひろがるよ。いしを 2つ・3つと ふやすと、なみ と なみ が ぶつかりあう「かんしょう」が おきるよ。なみの やま どうしが かさなると もっと たかく(しろく)、やま と たに が かさなると うち消しあって しずか(くらく) に なる ところが できて、しま模様が うかびあがるよ。おいた いしを もういちど タップすると けせるよ。</div>
 </div>
@@ -72,6 +75,9 @@
     updateHud();
   });
   $("#btnClear").onclick=()=>{sources=[];updateHud();};
+  $("#btnReset").onclick=()=>{                         // いしを けして スライダーも さいしょに もどす
+    sources=[]; waveR.value=8; speedR.value=1; t=0; updateHud();
+  };
   function updateHud(){hud.textContent=`いし: ${sources.length}こ`;}
 
   function frame(){

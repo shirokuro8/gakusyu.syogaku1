@@ -390,7 +390,7 @@
   }
 
   // ── 親ウィンドウ（べんきょうクエスト本体）へ「本当のゲームオーバー」を通知 ──
-  // ゲームチケットのライフ制（1まいで3回まで）は親側で管理する
+  // ゲームチケット（1まい＝1プレイ）は親側で管理する
   function notifyParentGameOver(){
     try{
       if(window.parent&&window.parent!==window){

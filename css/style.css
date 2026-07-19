@@ -13,7 +13,9 @@ html{font-size:16px}
 @media(min-width:1200px){html{font-size:18px}}
 @media(min-width:1900px){html{font-size:24px}}   /* TVブラウザ想定 */
 body{
-  font-family:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Yu Gothic',sans-serif;
+  /* Google Fonts(M PLUS Rounded 1c)が読めない/オフライン時は、端末内の
+     まるゴシック系→游ゴシック→system-ui の順に フォールバックする（表示は保たれる） */
+  font-family:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Yu Gothic UI','Yu Gothic','Meiryo',system-ui,sans-serif;
   background:var(--paper); color:var(--ink); min-height:100vh;
   background-image:radial-gradient(circle at 20% 10%, #fff8 0 20%, transparent 21%),
     linear-gradient(var(--paper),var(--paper));
@@ -139,8 +141,6 @@ button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
   display:flex;align-items:center;justify-content:center;padding:1rem}
 .modal .stage{position:relative;width:min(96vw,900px);height:min(88vh,700px)}
 .modal .stage iframe{width:100%;height:100%;border:none;border-radius:var(--r);background:#fff;display:block}
-.modal .ext-hud{position:absolute;top:.6rem;left:.6rem;z-index:2;background:#fff;border-radius:99px;
-  box-shadow:var(--shadow);padding:.35rem .9rem;font-weight:800;font-size:1.1rem;pointer-events:none}
 .modal .ext-over{position:absolute;inset:0;z-index:3;border-radius:var(--r);
   background:rgba(13,27,61,.94);color:#fff;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:.8rem;text-align:center;padding:1.5rem}
@@ -200,4 +200,22 @@ canvas.playcv{display:block;width:100%;border-radius:var(--r);background:#0d1b3d
 .rw-item{padding:.5rem 0;border-top:1px dashed var(--line);font-size:.9rem;font-weight:700}
 .rw-q{color:var(--ink2);line-height:1.9}
 .rw-a{color:#1c9e6d;margin-top:.15rem}
+/* ── かくにんダイアログ（クイズ中の「やめる」等。TVブラウザでも確実に動く独自モーダル。confirm()は使わない） ── */
+.confirm-box{width:min(92vw,430px);background:var(--card);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:1.6rem 1.2rem;text-align:center;animation:pop .35s}
+.confirm-box .cf-emoji{font-size:2.8rem;line-height:1}
+.confirm-box h2{font-size:1.3rem;margin:.5rem 0 .3rem}
+.confirm-box p{font-weight:700;color:var(--ink2);margin-bottom:1.2rem;line-height:1.7;font-size:.95rem}
+.confirm-btns{display:flex;gap:.7rem}
+.confirm-btns .bigbtn{flex:1;margin:0}
+.confirm-btns .cf-yes{background:var(--ng);color:#fff}
+.confirm-btns .cf-no{background:var(--theme);color:#fff}
+/* ── ぶつりラボ「🤔 なぜ？」問いかけパネル（観察のまえに 予想させる。physics/_lab.js が挿入する） ── */
+.why-panel{display:flex;align-items:flex-start;gap:.55rem;flex:0 0 auto;
+  background:linear-gradient(135deg,var(--theme-soft),var(--card));border-radius:14px;
+  box-shadow:var(--shadow);padding:.5rem .8rem;border-left:6px solid var(--theme)}
+.why-panel .why-emoji{font-size:1.35rem;line-height:1.25;flex-shrink:0}
+.why-panel .why-tx{font-size:.86rem;font-weight:800;line-height:1.5}
+.why-panel .why-tx b{color:var(--theme);margin-right:.35rem}
+.why-panel .why-try{display:block;color:var(--ink2);font-size:.76rem;font-weight:700;margin-top:.2rem}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

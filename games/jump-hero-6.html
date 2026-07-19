@@ -273,7 +273,7 @@ let WORLD_W=0,fireCD=0;
 
 // ---- セーブ ----
 // ── 親ウィンドウ（べんきょうクエスト本体）へ「本当のゲームオーバー」を通知 ──
-// ゲームチケットのライフ制（1まいで3回まで）は親側で管理する
+// ゲームチケット（1まい＝1プレイ）は親側で管理する
 function notifyParentGameOver(){
   try{
     if(window.parent&&window.parent!==window){
@@ -434,9 +434,10 @@ function startContinue(){
   state='play';document.getElementById('overlay').classList.add('hidden');updateHUD();
 }
 
-// ---- 効果音 ----
-let AC;
+// ---- 効果音（親アプリの「おと OFF」と 連動：BQ_INIT で mute を うけとる） ----
+let AC, MUTED=false;
 function beep(freq,dur=0.08,type='square',vol=0.15,slide=0){
+  if(MUTED)return;
   try{
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();
     const o=AC.createOscillator(),g=AC.createGain();
@@ -459,6 +460,10 @@ const sfx={
   clear:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'square',0.13),i*130));},
   allclear:()=>{[523,659,784,1047,1319,1568].forEach((f,i)=>setTimeout(()=>beep(f,0.2,'square',0.13),i*140));},
 };
+
+// ── 親アプリ（べんきょうクエスト）の おと設定を うけとって 一致させる ──
+window.addEventListener('message',e=>{ if(e.data && e.data.type==='BQ_INIT'){ MUTED=!!e.data.mute; } });
+try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'BQ_READY'},'*'); }catch(e){}
 
 function shootFire(){
   if(state!=='play'||player.power<2||fireCD>0)return;

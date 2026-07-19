@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css">
+<script>window.LAB_WHY={q:"げんを みじかく すると、おとは たかく なる？ ひくく なる？",try:"ながさスライダーを うごかして、なみの こまかさと おとを くらべよう"};</script>
+<script src="_lab.js"></script>
 <style>
   body{user-select:none;touch-action:none}
   html,body{height:100%;overflow:hidden}
@@ -32,6 +34,7 @@
   </div>
   <div class="toolbar">
     <button class="focusable" id="btnScale">🔀 スケールを かえる</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
   </div>
   <div class="sim-desc">げんを ゆびで つまんで ひっぱり、はなすと「はじいた」おとが なるよ。つよく ひっぱるほど、おおきな おとに なって、ゆれも おおきくなる。「ながさ」スライダーで げんを みじかくすると たかい おと、ながくすると ひくい おとに かわるよ。がめんの なみの かたちが、そのまま おとの なみなんだ！ たかい おとほど、ゆれも こまかく はやく なるよ。</div>
 </div>
@@ -132,6 +135,10 @@
   cv.addEventListener("pointercancel",release);
   lenR.oninput=e=>{lengthMul=+e.target.value;};
   $("#btnScale").onclick=()=>{scaleIdx=(scaleIdx+1)%SCALES.length;applyScale();};
+  $("#btnReset").onclick=()=>{                       // げんを しずめて さいしょの スケール・ながさに もどす
+    scaleIdx=0; applyScale(); lenR.value=1; lengthMul=1; dragMap.clear();
+    strings.forEach(s=>{s.amp=0;s.vibrating=false;s.dragPointerId=null;s.dragOffset=0;});
+  };
 
   function drawString(s,now){
     const xe=xEndNow(),segs=48;

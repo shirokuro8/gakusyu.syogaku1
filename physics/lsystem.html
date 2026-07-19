@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css">
+<script>window.LAB_WHY={q:"おなじ ルールを なんかいも くりかえすと、なぜ き の かたちに なるのかな？"};</script>
+<script src="_lab.js"></script>
 <style>
   body{user-select:none;touch-action:none}
   html,body{height:100%;overflow:hidden}
@@ -34,6 +36,7 @@
   <div class="toolbar">
     <label class="sliderline"><span>🌱 せいちょうだんかい</span><input type="range" class="focusable" id="iterR" min="2" max="5" step="1" value="4"></label>
     <button class="focusable" id="btnGrow">🌱 そだてる</button>
+    <button class="focusable" id="btnReset">🔄 リセット</button>
   </div>
   <div class="sim-desc">1本の くき から スタートして、「F・+・-・[・]」という 4しゅるいの きごう を なんかいも くりかえし おきかえる ルール(Lシステム)で、木 や シダ の かたち を つくって いるよ。「F」は くき を のばす、「+」「-」は みぎ や ひだり に まがる、「[」「]」は えだ を わけて また もどる の いみだよ。おなじ かんたんな ルール を くりかえす だけ で、ほんもの みたいな ふくざつな しぜん の かたち が うまれるのが おもしろいね。「せいちょうだんかい」を あげると、もっと こまかく えだわかれ するよ。</div>
 </div>
@@ -66,6 +69,10 @@
   }));
   iterR.addEventListener("change",generate);
   btnGrow.addEventListener("click",generate);
+  $("#btnReset").addEventListener("click",()=>{       // さいしょの「き」に もどす
+    pbtns.forEach(x=>x.classList.remove("on")); pbtns[0].classList.add("on");
+    curPreset=0; iterR.value=4; generate();
+  });
 
   function expand(preset,iter){
     let s=preset.axiom;

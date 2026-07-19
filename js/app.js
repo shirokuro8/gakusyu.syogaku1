@@ -144,7 +144,6 @@ const EXTRA_GAMES=[
 /* ================= 保存（localStorage） ================= */
 const KEY="bq2_data";
 const MAX_TICKETS=5;      // まちがいノートボーナスで ためられる チケットの上限（クイズクリアぶんは 上限なしで必ず発行）
-const TICKET_LIVES=3;     // チケット1まいで あそべる回数（ゲームオーバー3回で終了）
 const WRONG_NOTE_GOAL=5;  // まちがいノートの もんだいを これだけ正解すると チケット1まい
 let DB=load();
 function load(){
@@ -158,6 +157,15 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
 function localDate(t){const d=t?new Date(t):new Date();const p=n=>String(n).padStart(2,"0");
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
 function today(){return localDate()}
+/* ── まちがいノートの 間隔反復（忘却曲線ベースの 再出題スケジュール） ──
+ * まちがえた問題は box:0 で登録し、ふくしゅうで 正解するたびに box を1つ上げて、
+ * つぎに出す日(due)を SRS_INTERVALS ぶんだけ 先へずらす（1日→3日→1週間…）。
+ * box が SRS_INTERVALS の数を こえたら「おぼえた！」とみなし ノートから そつぎょう(除去)する。
+ * その日に due が きた問題を ゆうせんして 出題する（startReview を参照）。 */
+const SRS_INTERVALS=[1,3,7];  // box1→1日後, box2→3日後, box3→7日後（その次の正解で そつぎょう）
+function addDays(dateStr,n){const[y,mo,d]=String(dateStr).split("-").map(Number);
+  const dt=new Date(y,(mo||1)-1,d||1);dt.setDate(dt.getDate()+n);return localDate(dt.getTime());}
+function wrongDue(w){return !w.due||w.due<=today();}   // きょう ふくしゅうの じゅんばんが きているか
 /* ── ログ（学習の記録を くわしく のこす） ── */
 const LOG_MAX=300;         // ためられる ログの けんすう
 const DAILY_GOAL=30;       // きょうの もくひょう問題数（ホームの🎯バーに表示。renderHome()を参照）
@@ -201,12 +209,44 @@ function curGrade(){return GRADES.find(g=>g.id===DB.grade)||GRADES[0]}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 /* {かん字|かんじ} 記法を <ruby> タグに変換（ふりがな表示。データ側は generators.js/data-*.js を参照） */
 function furi(s){return esc(s).replace(/\{([^{}|]+)\|([^{}|]+)\}/g,"<ruby>$1<rt>$2</rt></ruby>")}
+/* ── かくにんダイアログ（独自モーダル） ──
+ * TVブラウザでは confirm() の動作が あてにならない/画面外に出ることがあるため、confirm() は使わず
+ * 画面内の 独自モーダルで たずねる。opts:{emoji,title,msg,yes,no,onYes,onNo}
+ *  ・「はい(yes)」を押すと onYes() を呼ぶ（cf-yes・赤）
+ *  ・「いいえ(no)」/背景タップ/Esc で onNo() を呼んで とじる（cf-no・テーマ色。初期フォーカスは こちら）
+ * CSS は css/style.css の .confirm-box を参照。*/
+function confirmDialog(opts){
+  opts=opts||{};
+  const m=document.createElement("div");m.className="modal";
+  m.innerHTML=`
+  <div class="confirm-box">
+    <div class="cf-emoji">${opts.emoji||"❓"}</div>
+    <h2>${opts.title||"よろしいですか？"}</h2>
+    ${opts.msg?`<p>${opts.msg}</p>`:""}
+    <div class="confirm-btns">
+      <button class="bigbtn focusable cf-no">${opts.no||"やめる"}</button>
+      <button class="bigbtn focusable cf-yes">${opts.yes||"はい"}</button>
+    </div>
+  </div>`;
+  let done=false;
+  const cancel=()=>{if(done)return;done=true;document.removeEventListener("keydown",onKey,true);m.remove();opts.onNo&&opts.onNo();};
+  const confirm=()=>{if(done)return;done=true;document.removeEventListener("keydown",onKey,true);m.remove();opts.onYes&&opts.onYes();};
+  function onKey(e){ if(e.key==="Escape"){e.preventDefault();e.stopPropagation();cancel();} }
+  m.querySelector(".cf-no").onclick=cancel;
+  m.querySelector(".cf-yes").onclick=confirm;
+  m.addEventListener("click",e=>{if(e.target===m)cancel();});   // 背景（モーダルの外側）タップで とじる＝いいえ
+  document.addEventListener("keydown",onKey,true);
+  document.body.appendChild(m);
+  const noBtn=m.querySelector(".cf-no");if(noBtn)noBtn.focus();   // あやまって「はい」を押しにくいよう 安全側へ初期フォーカス
+  return m;
+}
 /* ── ホーム ── */
 function renderHome(){
   document.body.dataset.grade=DB.grade;
   const g=curGrade();
   let tot=0,cor=0,starSum=0;const todayHist=DB.hist.filter(h=>h.d===today());
   const todayN=todayHist.reduce((a,h)=>a+h.n,0);
+  const dueCount=DB.wrong.filter(wrongDue).length;   // きょう ふくしゅうの じゅんばんが きた もんだいの数
   g.stages.forEach(s=>{const st=DB.stats[s.id];if(st){tot+=st.t;cor+=st.c}starSum+=DB.stars[s.id]||0;});
   const acc=tot?Math.round(cor/tot*100):0;
   const CIRC=2*Math.PI*42;
@@ -254,7 +294,9 @@ function renderHome(){
   <button class="review-card focusable" data-act="review">
     <span class="em">📓</span>
     <span class="tx"><b>まちがいノート</b>
-      <small>まちがえた もんだいが ${DB.wrong.length}こ。${WRONG_NOTE_GOAL}問 正解で 🎟️チケットが もらえるよ！</small></span>
+      <small>${dueCount>0
+        ?`きょう ふくしゅうする もんだい ${dueCount}こ（ぜんぶで ${DB.wrong.length}こ）。${WRONG_NOTE_GOAL}問 正解で 🎟️チケット！`
+        :`きょうの ふくしゅうは かんぺき！ ためた もんだいは ${DB.wrong.length}こ（また あとで 出るよ）`}</small></span>
     <span class="go">ふくしゅう →</span>
   </button>`:`
   <div class="review-card done">
@@ -302,7 +344,10 @@ function startQuiz(stage){
 }
 function startReview(){
   if(!DB.wrong.length){renderHome();return}
-  const items=shuffle(DB.wrong).slice(0,Q_PER_STAGE);
+  // きょう due が きた問題を ゆうせん（シャッフル）。足りなければ due が近い順で 補充する
+  const due=shuffle(DB.wrong.filter(wrongDue));
+  const notDue=DB.wrong.filter(w=>!wrongDue(w)).sort((a,b)=>(a.due<b.due?-1:a.due>b.due?1:0));
+  const items=due.concat(notDue).slice(0,Q_PER_STAGE);
   const stage={id:"review",name:"まちがいノート",emoji:"📓",time:20,review:true};
   quiz={stage,qs:items.map(w=>w.q),i:0,cor:0,score:0,t0:Date.now(),wrongList:[],reviewSrc:items};
   renderQ();
@@ -311,7 +356,7 @@ function renderQ(){
   const {stage,qs,i}=quiz;const q=qs[i];
   app.innerHTML=`
   <div class="quiz-top">
-    <button class="back focusable" data-act="home" style="margin:0">← やめる</button>
+    <button class="back focusable" data-act="quitquiz" style="margin:0">← やめる</button>
     <span>${stage.emoji} ${stage.name}</span>
     <span class="qcount">${i+1} / ${qs.length}</span>
   </div>
@@ -354,10 +399,22 @@ function finishQuiz(){
   const stars=acc>=90?3:acc>=70?2:acc>=50?1:0;
   bumpStreak();
   let ticketEarned=0;
-  if(stage.review){ // まちがいノート: 正解した問題はノートから除去し、正解数に応じてチケットを付与
-    const solved=new Set(qs.filter((q,i2)=>!wrongList.find(w=>w.q===q)).map(q=>q.q+(q.big||"")));
-    DB.wrong=DB.wrong.filter(w=>!solved.has(w.q.q+(w.q.big||"")));
-    ticketEarned=grantWrongNoteTickets(solved.size);
+  if(stage.review){ // まちがいノート(間隔反復): 正解=box↑&次回を先へ / 不正解=box0にもどす / そつぎょうは除去
+    const t=today();
+    const wrongKeys=new Set(wrongList.map(w=>w.q.q+(w.q.big||"")));
+    let solvedCount=0;
+    (quiz.reviewSrc||[]).forEach(item=>{
+      const key=item.q.q+(item.q.big||"");
+      const w=DB.wrong.find(x=>(x.q.q+(x.q.big||""))===key);
+      if(!w)return;
+      if(wrongKeys.has(key)){ w.box=0; w.due=t; }        // まちがえた → さいしょの箱へ もどす
+      else{                                               // せいかい → つぎの箱へ（間隔をのばす）
+        solvedCount++; w.box=(w.box|0)+1;
+        w.due=(w.box>SRS_INTERVALS.length)?t:addDays(t,SRS_INTERVALS[w.box-1]);
+      }
+    });
+    DB.wrong=DB.wrong.filter(w=>(w.box|0)<=SRS_INTERVALS.length); // box が 上限をこえたら そつぎょう(除去)
+    ticketEarned=grantWrongNoteTickets(solvedCount);
   }else if(stage.sougou){ // 総合問題: せいかい数に おうじて チケットを付与（14問以上=2まい、10〜13問=1まい）
     const prevBest=DB.best[stage.id]||0;
     DB.stars[stage.id]=Math.max(DB.stars[stage.id]||0,stars);
@@ -383,7 +440,8 @@ function finishQuiz(){
     quiz.isFirstClear=isFirstClear;quiz.isNewRecord=isNewRecord;quiz.isHighAcc=isHighAcc;quiz.prevBest=prevBest;
     quiz.wrongGateActive=wrongGateActive;
   }
-  wrongList.forEach(w=>{if(DB.wrong.length<60&&!DB.wrong.find(x=>x.q.q===w.q.q&&x.q.big===w.q.big))DB.wrong.push(w)});
+  wrongList.forEach(w=>{if(DB.wrong.length<60&&!DB.wrong.find(x=>x.q.q===w.q.q&&x.q.big===w.q.big))
+    DB.wrong.push({q:w.q,stageId:w.stageId,box:0,due:today()})});  // 新しいまちがいは box:0・きょうから ふくしゅう対象
   DB.hist.unshift({d:today(),g:DB.grade,s:stage.name,acc,score,n:qs.length});
   DB.hist=DB.hist.slice(0,100);
   const logSubject=stage.review?"review":stage.subject;
@@ -519,13 +577,13 @@ function renderGames(){
   <button class="back focusable" data-act="home">← もどる</button>
   <div class="pagetitle">🎮 ゲームひろば</div>
   <div class="tk-box" style="text-align:center">🎟️ ゲームチケット ${DB.tickets||0}まい
-    <small>チケットを つかうと ${TICKET_LIVES}回まで あそべるよ（ゲームによって ひつような まいすうが ちがうよ）</small></div>
+    <small>チケットを つかうと あそべるよ（ゲームによって ひつような まいすうが ちがうよ）</small></div>
   <div class="grid">
     ${extras}
   </div>
   <div class="game-hint">タップ / スペース / 決定ボタンで あそべるよ！</div>`;
 }
-/* ── 外部ゲーム(iframe): チケット1まい=ゲームオーバー3回まで ── */
+/* ── 外部ゲーム(iframe): チケット1まい=1プレイ（ゲーム内の3つの命を つかいきった「本当の」ゲームオーバーで おしまい。画面枠ハートは廃止） ── */
 function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
   const cost=g.cost||1;
   if((DB.tickets||0)<cost){              // チケットが たりなければ 遊べない
@@ -547,11 +605,9 @@ function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
     score:null,acc:null,cor:null,total:null,stars:null,
     ticket:-cost,ticketBalance:DB.tickets||0});
   save();
-  let lives=TICKET_LIVES;
   const m=document.createElement("div");m.className="modal";
   m.innerHTML=`
   <div class="stage">
-    <div class="ext-hud">${"❤️".repeat(lives)}</div>
     <iframe src="${g.src}"></iframe>
     <div class="ext-over hidden">
       <div style="font-size:2.6rem">🎮</div>
@@ -560,19 +616,20 @@ function openExt(i){const g=EXTRA_GAMES[i];if(!g)return;
       <button class="bigbtn focusable ext-over-close">🎮 ゲームひろば</button>
     </div>
   </div>
-  <button class="close">✕</button>`;
-  const hudEl=m.querySelector(".ext-hud");
+  <button class="close focusable">✕</button>`;
   const overEl=m.querySelector(".ext-over");
   const iframeEl=m.querySelector("iframe");
+  // ゲーム側へ 親アプリの おと設定(DB.mute)を わたし、おとの ON/OFF を 一致させる（postMessage）
+  function sendInit(){try{iframeEl.contentWindow.postMessage({type:"BQ_INIT",mute:!!DB.mute},"*");}catch(e){}}
+  iframeEl.addEventListener("load",sendInit);      // iframe 読込後に 初期設定を おくる
   function onMsg(e){
-    if(!e.data||e.data.type!=="BQ_GAME_OVER")return;
-    if(e.source!==iframeEl.contentWindow)return;   // このiframe以外からの通知は無視
-    lives=Math.max(0,lives-1);
-    hudEl.textContent="❤️".repeat(lives)||"💔";
-    if(lives<=0){
-      overEl.classList.remove("hidden");
-      iframeEl.style.pointerEvents="none";          // これ以上あそべないようにする
-    }
+    if(e.source!==iframeEl.contentWindow)return;    // このiframe以外からの通知は無視
+    if(!e.data)return;
+    if(e.data.type==="BQ_READY"){sendInit();return;}// ゲーム側から 要求が来たら 初期設定を かえす（読込タイミングの取りこぼしぼうし）
+    if(e.data.type!=="BQ_GAME_OVER")return;
+    // ゲーム内の 3つの命を つかいきった「本当の」ゲームオーバー → この回で おしまい（画面枠ハートは廃止したので すぐ終了）
+    overEl.classList.remove("hidden");
+    iframeEl.style.pointerEvents="none";            // これ以上あそべないようにする
   }
   function cleanup(){window.removeEventListener("message",onMsg);m.remove();}
   window.addEventListener("message",onMsg);
@@ -618,7 +675,7 @@ function openPhysicsSim(i){const p=PHYSICS_SIMS[i];if(!p)return;
   <div class="stage">
     <iframe src="${p.src}"></iframe>
   </div>
-  <button class="close">✕</button>`;
+  <button class="close focusable">✕</button>`;
   m.querySelector(".close").onclick=()=>m.remove();
   document.body.appendChild(m);}
 /* ================= イベント委譲 ================= */
@@ -630,6 +687,16 @@ app.addEventListener("click",e=>{
     ||GRADES.flatMap(g=>g.stages).find(x=>x.id===b.dataset.id);if(s)go("quiz",s);}
   else if(act==="specialstage"){const s=IJIN_STAGES.find(x=>x.id===b.dataset.id);if(s)go("quiz",s);}
   else if(act==="ans")answer(+b.dataset.i);
+  // クイズ中の「← やめる」: とちゅうで やめると この回は きろくに のこらない → 誤タップぼうしに かくにん
+  else if(act==="quitquiz"){
+    stopTimer();                                   // ダイアログ表示中は タイマーを止める（時間切れで裏の画面が進まないように）
+    const reviewing=quiz&&quiz.stage&&quiz.stage.review;
+    confirmDialog({emoji:"🚪",title:reviewing?"ふくしゅうを やめる？":"クイズを やめる？",
+      msg:"いま やめると、この かいの きろくは のこらないよ。",
+      yes:"やめる",no:"つづける",
+      onYes:()=>go("home"),
+      onNo:()=>{ if(quiz&&quiz.stage)startTimer(quiz.stage.time); }});  // つづけるなら タイマー再開（のこり時間は満タンに）
+  }
   else if(act==="home")go("home");
   // まちがいノートのステージは gen を持たないため、通常クイズとして再開するとクラッシュする → review画面へ
   else if(act==="retry"){const s=window._lastStage;if(s&&s.review)go("review");else if(s)go("quiz",s);}
@@ -646,7 +713,11 @@ app.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   const keys=["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"];
   if(!keys.includes(e.key))return;
-  const els=[...document.querySelectorAll(".focusable:not(:disabled)")];
+  // モーダル（かくにんダイアログ・チケット不足・ゲームオーバー等）が 開いていたら、その中だけを
+  // ナビの対象にする（うしろの画面の ボタンに フォーカスが にげないように）
+  const modals=document.querySelectorAll(".modal");
+  const scope=modals.length?modals[modals.length-1]:document;
+  const els=[...scope.querySelectorAll(".focusable:not(:disabled)")];
   if(!els.length)return;
   let cur=document.activeElement;
   if(!els.includes(cur)){els[0].focus();return}
