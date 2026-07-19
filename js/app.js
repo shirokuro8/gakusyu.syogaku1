@@ -1,11 +1,12 @@
 "use strict";
 /* ================= 学年・ステージ定義 =================
- * 学年を追加するには: GRADES に {id:'g5', label:'5ねんせい', stages:[...]} を追加
- * 各 stage は {id, name, emoji, subject:'kokugo'|'sansu'|'shakai'|'rika', time:秒, gen:関数, count?:問題数}
+ * 学年を追加するには: 下に G5_STAGES を定義し、末尾の GRADES に
+ *   {id:'g5', label:'5ねんせい', stages:[...G5_STAGES, g5SougouStage]} を追加する
+ *   （g5SougouStage は makeSougouGen(G5_STAGES) で作る。総合問題の節を参照）
+ * 各 stage は {id, name, emoji, subject:'kokugo'|'sansu'|'shakai'|'rika'|'eigo'|'sougou', time:秒, gen:関数, count?:問題数}
  * gen() は generators.js の関数を参照する。count を付けると その面だけ 問題数を変えられる。
  */
-const GRADES=[
- {id:"g1",label:"１ねんせい",stages:[
+const G1_STAGES=[
    {id:"g1_hira",name:"ひらがな",emoji:"🌸",subject:"kokugo",time:15,gen:()=>emojiWord(HIRA,"ひらがな")},
    {id:"g1_kata",name:"カタカナ",emoji:"🚀",subject:"kokugo",time:15,gen:()=>emojiWord(KATA,"カタカナ")},
    {id:"g1_kr",name:"かんじ よみ",emoji:"📖",subject:"kokugo",time:15,gen:idx=>kanjiReadMix(KANJI1,JUKUGO1,idx)},
@@ -15,8 +16,8 @@ const GRADES=[
    {id:"g1_carry",name:"くりあがり けいさん",emoji:"🔥",subject:"sansu",time:18,gen:g1carry},
    {id:"g1_clock",name:"とけい",emoji:"🕒",subject:"sansu",time:15,gen:g1clock},
    {id:"g1_three",name:"３つの かず",emoji:"🎲",subject:"sansu",time:18,gen:g1three},
- ]},
- {id:"g2",label:"２ねんせい",stages:[
+];
+const G2_STAGES=[
    {id:"g2_kr",name:"かん字 よみ",emoji:"📗",subject:"kokugo",time:15,gen:idx=>kanjiReadMix(KANJI2,JUKUGO2,idx)},
    {id:"g2_kw",name:"かん字 かき",emoji:"🖊️",subject:"kokugo",time:15,gen:idx=>kanjiWriteMix(KANJI2,JUKUGO2,idx)},
    {id:"g2_oppo",name:"はんたい ことば",emoji:"↔️",subject:"kokugo",time:15,gen:opposite},
@@ -27,8 +28,8 @@ const GRADES=[
    {id:"g2_time",name:"時こくと時間",emoji:"⏰",subject:"sansu",time:20,gen:g2time},
    {id:"g2_num",name:"1000までの かず",emoji:"💯",subject:"sansu",time:18,gen:g2num},
    {id:"g2_frac",name:"ぶんすう",emoji:"🍕",subject:"sansu",time:18,gen:g2frac},
- ]},
- {id:"g3",label:"３ねんせい",stages:[
+];
+const G3_STAGES=[
    {id:"g3_kr",name:"かん字 よみ",emoji:"📘",subject:"kokugo",time:15,gen:()=>kanjiRead(KANJI3)},
    {id:"g3_kw",name:"かん字 かき",emoji:"🖋️",subject:"kokugo",time:15,gen:()=>kanjiWrite(KANJI3)},
    {id:"g3_romaji",name:"ローマ字",emoji:"🔤",subject:"kokugo",time:15,gen:romaji},
@@ -50,8 +51,8 @@ const GRADES=[
    {id:"g3_magnet",name:"じしゃく",emoji:"🧲",subject:"rika",time:18,gen:()=>qa(MAGNET)},
    {id:"g3_elec",name:"電気",emoji:"🔋",subject:"rika",time:18,gen:()=>qa(ELECTRIC)},
    {id:"g3_sun",name:"太陽とかげ",emoji:"☀️",subject:"rika",time:18,gen:()=>qa(SUNSHADOW)},
- ]},
- {id:"g4",label:"４ねんせい",stages:[
+];
+const G4_STAGES=[
    {id:"g4_kr",name:"かん字 よみ",emoji:"📕",subject:"kokugo",time:15,gen:()=>kanjiRead(KANJI4)},
    {id:"g4_kw",name:"かん字 かき",emoji:"🖋️",subject:"kokugo",time:15,gen:()=>kanjiWrite(KANJI4)},
    {id:"g4_idiom",name:"ことわざ・かん用句",emoji:"🦊",subject:"kokugo",time:20,gen:idiom},
@@ -73,9 +74,53 @@ const GRADES=[
    {id:"g4_moon",name:"月と星",emoji:"🌛",subject:"rika",time:18,gen:()=>qa(MOONSTAR4)},
    {id:"g4_air",name:"とじこめた空気と水",emoji:"💨",subject:"rika",time:18,gen:()=>qa(AIRWATER4)},
    {id:"g4_body",name:"人の体のつくり",emoji:"🦴",subject:"rika",time:18,gen:()=>qa(BODY4)},
- ]},
 ];
 const Q_PER_STAGE=10;
+/* ================= 総合問題（各学年ごとの まとめテスト） =================
+ * その学年の 全ステージ（全科目・全コンテンツ）から バランスよく14問 ＋ 偉人・名言(IJIN_STAGES)から
+ * かならず1問の 計15問(SOUGOU_Q)を出題する。balancedPicks() が 科目→コンテンツの順に ラウンドロビンで
+ * えらぶため、毎回 えらばれる単元・問題が かわる。せいかい数に おうじて ゲームチケットを付与
+ * （14問以上=2まい、10〜13問=1まい。finishQuiz()を参照）。
+ */
+const SOUGOU_Q=15;
+function balancedPicks(stages,count){ // 科目ごとに束ね、科目→コンテンツの順にラウンドロビンでえらぶ
+  const bySubj={};
+  stages.forEach(s=>{(bySubj[s.subject]=bySubj[s.subject]||[]).push(s)});
+  const subjKeys=shuffle(Object.keys(bySubj));
+  const queues=subjKeys.map(k=>shuffle(bySubj[k]));
+  const picks=[];let qi=0;
+  while(picks.length<count){
+    const gi=qi%queues.length;
+    if(queues[gi].length===0)queues[gi]=shuffle(bySubj[subjKeys[gi]]);
+    picks.push(queues[gi].shift());
+    qi++;
+  }
+  return picks;
+}
+function makeSougouGen(stages){ // クイズ開始(idx===0)ごとに その回の出題プランを組みなおす
+  let plan=null;
+  return function(idx,N){
+    if(idx===0||!plan||plan.length!==N){
+      const regCount=N-1;
+      const regPicks=balancedPicks(stages,regCount);
+      const ijinSlot=R(N);                     // N問のうち ちょうど1問だけ 偉人・名言にする
+      plan=[];let ri=0;
+      for(let i=0;i<N;i++)plan.push(i===ijinSlot?{ijin:true}:{stage:regPicks[ri++]});
+    }
+    const slot=plan[idx];
+    return slot.ijin?pick(IJIN_STAGES).gen():slot.stage.gen(R(10),10);
+  };
+}
+const g1SougouStage={id:"g1_sougou",name:"そうごう問題",emoji:"🏆",subject:"sougou",time:30,count:SOUGOU_Q,sougou:true,gen:makeSougouGen(G1_STAGES)};
+const g2SougouStage={id:"g2_sougou",name:"そうごう問題",emoji:"🏆",subject:"sougou",time:30,count:SOUGOU_Q,sougou:true,gen:makeSougouGen(G2_STAGES)};
+const g3SougouStage={id:"g3_sougou",name:"そうごう問題",emoji:"🏆",subject:"sougou",time:30,count:SOUGOU_Q,sougou:true,gen:makeSougouGen(G3_STAGES)};
+const g4SougouStage={id:"g4_sougou",name:"そうごう問題",emoji:"🏆",subject:"sougou",time:30,count:SOUGOU_Q,sougou:true,gen:makeSougouGen(G4_STAGES)};
+const GRADES=[
+ {id:"g1",label:"１ねんせい",stages:[...G1_STAGES,g1SougouStage]},
+ {id:"g2",label:"２ねんせい",stages:[...G2_STAGES,g2SougouStage]},
+ {id:"g3",label:"３ねんせい",stages:[...G3_STAGES,g3SougouStage]},
+ {id:"g4",label:"４ねんせい",stages:[...G4_STAGES,g4SougouStage]},
+];
 /* ================= 特別枠：偉人・名言 =================
  * 学年に関係なく ホーム画面に 常に表示される 科目。
  * 「偉人」単元の次に「名言」単元を追加する場合も この配列に足す。
@@ -112,7 +157,7 @@ function today(){return new Date().toISOString().slice(0,10)}
 /* ── ログ（学習の記録を くわしく のこす） ── */
 const LOG_MAX=300;         // ためられる ログの けんすう
 const SUBJECT_LABEL={kokugo:"こくご",sansu:"さんすう",shakai:"しゃかい",rika:"りか",eigo:"えいご",
-  ijin:"偉人・名言",review:"まちがいノート",game:"ゲーム",physics:"ぶつりラボ"};
+  ijin:"偉人・名言",sougou:"そうごう問題",review:"まちがいノート",game:"ゲーム",physics:"ぶつりラボ"};
 function addLog(entry){DB.log=DB.log||[];DB.log.unshift(entry);DB.log=DB.log.slice(0,LOG_MAX);}
 function fmtDT(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,"0");
   return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
@@ -120,9 +165,9 @@ function bumpStreak(){const t=today();if(DB.streak.last===t)return;
   const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
   DB.streak.n=(DB.streak.last===y)?DB.streak.n+1:1;DB.streak.last=t;}
 /* ── ゲームチケット ── */
-function grantTickets(qualifies){                          // 条件を みたせば 上限なしで 必ず チケットを1まい発行
-  if(!qualifies)return 0;
-  DB.tickets=(DB.tickets||0)+1;return 1;}
+function grantTickets(n){                                  // n まい発行（上限なし・必ず発行）。0以下なら発行しない
+  n=n|0;if(n<=0)return 0;
+  DB.tickets=(DB.tickets||0)+n;return n;}
 /* まちがいノート: まちがえた問題を WRONG_NOTE_GOAL 問 正解するたびに チケット1まい */
 function grantWrongNoteTickets(correctCount){DB.wrongProg=(DB.wrongProg||0)+correctCount;let earned=0;
   while(DB.wrongProg>=WRONG_NOTE_GOAL&&(DB.tickets||0)<MAX_TICKETS){DB.wrongProg-=WRONG_NOTE_GOAL;DB.tickets=(DB.tickets||0)+1;earned++;}
@@ -204,6 +249,7 @@ function renderHome(){
     <span class="tx"><b>まちがいノート</b>
       <small>いまは まちがいが ないよ！この ちょうしで がんばろう！</small></span>
   </div>`}
+  ${secRow("sougou","🏆 そうごう問題","var(--sougou)")}
   ${secRow("kokugo","こくご","var(--kokugo)")}
   ${secRow("shakai","しゃかい","var(--shakai)")}
   ${secRow("sansu","さんすう","var(--sansu)")}
@@ -294,7 +340,18 @@ function finishQuiz(){
   const stars=acc>=90?3:acc>=70?2:acc>=50?1:0;
   bumpStreak();
   let ticketEarned=0;
-  if(!stage.review){
+  if(stage.review){ // まちがいノート: 正解した問題はノートから除去し、正解数に応じてチケットを付与
+    const solved=new Set(qs.filter((q,i2)=>!wrongList.find(w=>w.q===q)).map(q=>q.q+(q.big||"")));
+    DB.wrong=DB.wrong.filter(w=>!solved.has(w.q.q+(w.q.big||"")));
+    ticketEarned=grantWrongNoteTickets(solved.size);
+  }else if(stage.sougou){ // 総合問題: せいかい数に おうじて チケットを付与（14問以上=2まい、10〜13問=1まい）
+    const prevBest=DB.best[stage.id]||0;
+    DB.stars[stage.id]=Math.max(DB.stars[stage.id]||0,stars);
+    DB.best[stage.id]=Math.max(prevBest,score);
+    const st=DB.stats[stage.id]||{c:0,t:0};st.c+=cor;st.t+=qs.length;DB.stats[stage.id]=st;
+    ticketEarned=grantTickets(cor>=14?2:cor>=10?1:0);
+    if(ticketEarned>0){DB.cleared=DB.cleared||{};DB.cleared[stage.id]=true}
+  }else{
     const prevBest=DB.best[stage.id]||0;
     const isFirstClear=!(DB.cleared&&DB.cleared[stage.id]);     // このステージで まだ一度も チケットを もらっていない
     const isNewRecord=score>=prevBest;                          // 自己ベスト タイ or 更新
@@ -307,14 +364,10 @@ function finishQuiz(){
     // まちがい10以上は付与停止(ノート優先)。ただし9割いじょう(満点ふくむ)は 何度でも必ず発行
     const wrongGateActive=DB.wrong.length>=10&&!isHighAcc;
     // 条件を みたせば 必ず チケットを1まい発行
-    ticketEarned=grantTickets(qualifies&&!wrongGateActive);
+    ticketEarned=grantTickets(qualifies&&!wrongGateActive?1:0);
     if(ticketEarned>0){DB.cleared=DB.cleared||{};DB.cleared[stage.id]=true}
     quiz.isFirstClear=isFirstClear;quiz.isNewRecord=isNewRecord;quiz.isHighAcc=isHighAcc;quiz.prevBest=prevBest;
     quiz.wrongGateActive=wrongGateActive;
-  }else{ // まちがいノート: 正解した問題はノートから除去し、正解数に応じてチケットを付与
-    const solved=new Set(qs.filter((q,i2)=>!wrongList.find(w=>w.q===q)).map(q=>q.q+(q.big||"")));
-    DB.wrong=DB.wrong.filter(w=>!solved.has(w.q.q+(w.q.big||"")));
-    ticketEarned=grantWrongNoteTickets(solved.size);
   }
   wrongList.forEach(w=>{if(DB.wrong.length<60&&!DB.wrong.find(x=>x.q.q===w.q.q&&x.q.big===w.q.big))DB.wrong.push(w)});
   DB.hist.unshift({d:today(),g:DB.grade,s:stage.name,acc,score,n:qs.length});
@@ -334,7 +387,26 @@ function finishQuiz(){
 function renderResult(r){
   const msg=r.acc>=90?"すごい！パーフェクトきゅう！":r.acc>=70?"よくできました！":r.acc>=50?"がんばったね！":"もういちど ちょうせんしよう！";
   let tk="";
-  if(!r.stage.review){
+  if(r.stage.review){
+    if(r.ticketEarned>0){
+      tk=`<div class="tk-box tk-got">🎟️ まちがいノートを がんばったので ゲームチケットを ゲット！
+        <small>もっている チケット：${r.tickets}まい</small></div>`;
+    }else{
+      tk=`<div class="tk-box">🎟️ こんかいは チケットは もらえなかったよ
+        <small>まちがえた 問題を ${WRONG_NOTE_GOAL}問 正解すると ゲームチケットが もらえるよ</small></div>`;
+    }
+  }else if(r.stage.sougou){
+    if(r.ticketEarned>0){
+      const badge=r.ticketEarned>=2?"🏆 だいせいこう！":"🌟 よくがんばった！";
+      tk=`<div class="tk-box tk-got">
+        <div class="tk-badge">${badge}</div>
+        🎟️ ゲームチケットを ${r.ticketEarned}まい ゲット！
+        <small>もっている チケット：${r.tickets}まい</small></div>`;
+    }else{
+      tk=`<div class="tk-box">🎟️ こんかいは チケットは もらえなかったよ
+        <small>15問中 10問いじょう正解で🎟️1まい、14問いじょう正解で🎟️2まい もらえるよ</small></div>`;
+    }
+  }else{
     if(r.ticketEarned>0){
       const badge=r.isFirstClear?"🎉 はじめてクリア！":r.isNewRecord?"🏆 じこベスト こうしん！":"🌟 9割いじょう せいかい！";
       tk=`<div class="tk-box tk-got">
@@ -350,14 +422,6 @@ function renderResult(r){
     }else{
       tk=`<div class="tk-box">🎟️ こんかいは チケットは もらえなかったよ
         <small>じこベスト(${r.prevBest}点)を こえるか、9割いじょう せいかいすると もらえるよ</small></div>`;
-    }
-  }else{
-    if(r.ticketEarned>0){
-      tk=`<div class="tk-box tk-got">🎟️ まちがいノートを がんばったので ゲームチケットを ゲット！
-        <small>もっている チケット：${r.tickets}まい</small></div>`;
-    }else{
-      tk=`<div class="tk-box">🎟️ こんかいは チケットは もらえなかったよ
-        <small>まちがえた 問題を ${WRONG_NOTE_GOAL}問 正解すると ゲームチケットが もらえるよ</small></div>`;
     }
   }
   app.innerHTML=`
