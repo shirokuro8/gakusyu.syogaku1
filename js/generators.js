@@ -41,7 +41,7 @@ function g1carry(){if(R(2)){let a=R(6)+4,b=R(6)+4;if(a+b<11)b=11-a+R(4);return m
   const ans=R(8)+2,b=R(6)+4,a=ans+b;return mk(`${a} － ${b} ＝ ？`,ans,numWrongs(ans));}
 function g1three(){const t=R(3);let a,b,c,ans,op;
   if(t===0){a=R(4)+1;b=R(4)+1;c=R(4)+1;ans=a+b+c;op=`${a} ＋ ${b} ＋ ${c}`}
-  else if(t===1){a=R(5)+5;b=R(3)+1;c=R(3)+1;ans=a-b-c;op=`${a} － ${b} － ${c}`}
+  else if(t===1){a=R(5)+5;b=R(3)+1;const cMax=Math.min(3,a-b);c=R(cMax)+1;ans=a-b-c;op=`${a} － ${b} － ${c}`}
   else{a=R(5)+3;b=R(4)+1;c=R(4)+1;ans=a+b-c;op=`${a} ＋ ${b} － ${c}`}
   return mk(`${op} ＝ ？`,ans,numWrongs(ans));}
 /* ── 小1 文章題（えらぶ答えに「しき」も表示） ── */
@@ -61,6 +61,84 @@ function g1word(){
   const [v,tot]=pick([["たべました","のこりは"],["あげました","のこりは"],["つかいました","のこりは"]]);
   const q=`${em} ${nm}が ${a}${c} あります。\n${b}${c} ${v}。\n${tot} なん${c} ですか？`;
   return mk(q,`${a} － ${b} ＝ ${ans}`,[`${a} ＋ ${b} ＝ ${a+b}`,`${a} － ${b} ＝ ${ans+1}`,`${a} － ${b} ＝ ${ans-1}`]);
+}
+/* ── 小2 文章題（たしざん・ひきざん(2けた)・かけ算） ── */
+function g2word(){
+  const T=[["🍎","りんご","こ"],["🎁","プレゼント","こ"],["🐟","さかな","びき"],
+    ["📦","はこ","こ"],["🚌","バス","だい"],["🍬","あめ","こ"],
+    ["⚽","ボール","こ"],["🍞","パン","こ"],["🐦","とり","わ"]];
+  const t=R(3);
+  if(t===0){ // たしざん(2けた)
+    const[em,nm,c]=pick(T);
+    const a=R(40)+10,b=R(40)+10,ans=a+b;
+    const[v,tot]=pick([["もらいました","あわせて"],["ふえました","ぜんぶで"],["とどきました","ぜんぶで"]]);
+    const q=`${em} ${nm}が ${a}${c} あります。\nあとで ${b}${c} ${v}。\n${tot} なん${c}に なりますか？`;
+    return mk(q,`${a} ＋ ${b} ＝ ${ans}`,
+      [`${a} － ${b} ＝ ${Math.abs(a-b)}`,`${a} ＋ ${b} ＝ ${ans+10}`,`${a} ＋ ${b-1} ＝ ${a+b-1}`]);
+  }
+  if(t===1){ // ひきざん(2けた)
+    const[em,nm,c]=pick(T);
+    const a=R(50)+30,b=R(a-10)+5,ans=a-b;
+    const[v,tot]=pick([["つかいました","のこりは"],["あげました","のこりは"],["売れました","のこりは"]]);
+    const q=`${em} ${nm}が ${a}${c} あります。\n${b}${c} ${v}。\n${tot} なん${c} ですか？`;
+    return mk(q,`${a} － ${b} ＝ ${ans}`,
+      [`${a} ＋ ${b} ＝ ${a+b}`,`${a} － ${b} ＝ ${ans+10}`,`${a} － ${b-1} ＝ ${ans+1}`]);
+  }
+  const MULT=[["🍬","あめ"],["🍎","りんご"],["🍪","クッキー"],["⭐","シール"],["🖍️","えんぴつ"],["🍩","ドーナツ"]];
+  const[em,nm]=pick(MULT);
+  const per=R(8)+1,group=R(8)+1,ans=per*group;
+  const q=`${em} 1人に ${nm}を ${per}こずつ くばります。\n${group}人に くばると、ぜんぶで なんこ 必要ですか？`;
+  return mk(q,`${per} × ${group} ＝ ${ans}`,
+    [`${per} ＋ ${group} ＝ ${per+group}`,`${per} × ${group} ＝ ${ans+per}`,`${per} × ${group+1} ＝ ${per*(group+1)}`]);
+}
+/* ── 小3 文章題（わり算(等分除・包含除)・かけ算の筆算） ── */
+function g3word(){
+  const D=[["🍬","あめ"],["🍎","りんご"],["🍪","クッキー"],["⚽","ボール"],["✏️","えんぴつ"],["🍩","ドーナツ"]];
+  const t=R(3);
+  if(t===0){ // わり算：等分除（何人で分けると1人分は？）
+    const[em,nm]=pick(D);
+    const b=R(8)+2,q=R(8)+2,a=b*q;
+    const question=`${em} ${nm}が ${a}こ あります。\n${b}人で 同じ数ずつ 分けると、1人分は なんこに なりますか？`;
+    return mk(question,`${a} ÷ ${b} ＝ ${q}`,
+      [`${a} × ${b} ＝ ${a*b}`,`${a} ÷ ${b} ＝ ${q+1}`,`${a} － ${b} ＝ ${a-b}`]);
+  }
+  if(t===1){ // わり算：包含除（1人に何こずつで、何人に分けられる？）
+    const[em,nm]=pick(D);
+    const per=R(7)+2,group=R(7)+2,a=per*group;
+    const question=`${em} ${nm}が ${a}こ あります。\n1人に ${per}こずつ 分けると、なん人に 分けられますか？`;
+    return mk(question,`${a} ÷ ${per} ＝ ${group}`,
+      [`${a} × ${per} ＝ ${a*per}`,`${a} ÷ ${per} ＝ ${group+1}`,`${a} ＋ ${per} ＝ ${a+per}`]);
+  }
+  const[em,nm]=pick(D);
+  const per=R(89)+11,group=R(8)+2,ans=per*group; // 2けた×1けた
+  const g2=group-1>0?group-1:group+2;
+  const question=`${em} 1はこに ${nm}が ${per}こ 入っています。\n${group}はこでは、ぜんぶで なんこに なりますか？`;
+  return mk(question,`${per} × ${group} ＝ ${ans}`,
+    [`${per} ＋ ${group} ＝ ${per+group}`,`${per} × ${group} ＝ ${ans+per}`,`${per} × ${g2} ＝ ${per*g2}`]);
+}
+/* ── 小4 文章題（2けたで わるわり算・2だんかいの計算） ── */
+function g4word(){
+  const SNACK=[["りんご"],["みかん"],["パン"],["ドーナツ"],["クッキー"],["ノート"]];
+  const t=R(3);
+  if(t===0){ // 2だんかい（買い物と残金）
+    const[n1]=pick(SNACK),[n2]=pick(SNACK);
+    const p1=(R(9)+3)*10,p2=(R(9)+3)*10,leftover=(R(9)+1)*10,budget=p1+p2+leftover;
+    const q=`${budget}円 持っています。\n${p1}円の${n1}と ${p2}円の${n2}を 買いました。\nのこりは 何円ですか？`;
+    return mk(q,`${budget} － (${p1} ＋ ${p2}) ＝ ${leftover}`,
+      [`${budget} － ${p1} ＝ ${budget-p1}`,`${budget} ＋ (${p1} ＋ ${p2}) ＝ ${budget+p1+p2}`,`${budget} － (${p1} ＋ ${p2}) ＝ ${leftover+10}`]);
+  }
+  if(t===1){ // 2けたで わる わり算
+    const b=R(19)+11,q=R(8)+2,a=b*q;
+    const[em,nm]=pick([["🍬","あめ"],["✏️","えんぴつ"],["⭐","シール"],["🍪","クッキー"]]);
+    const question=`${em} ${nm}が ${a}こ あります。\n${b}人で 同じ数ずつ 分けると、1人分は なんこに なりますか？`;
+    return mk(question,`${a} ÷ ${b} ＝ ${q}`,
+      [`${a} × ${b} ＝ ${a*b}`,`${a} ÷ ${b} ＝ ${q+1}`,`${a} － ${b} ＝ ${a-b}`]);
+  }
+  const[em,nm]=pick([["🍬","あめ"],["🎁","プレゼント"],["📕","本"],["🖍️","色えんぴつ"]]);
+  const per=R(20)+5,group=R(8)+2,extra=R(9)+1,ans=per*group+extra;
+  const question=`${em} 1人に ${nm}を ${per}こずつ くばります。\n${group}人に くばったあと、${extra}こ あまりました。\nはじめに あった 数は なんこですか？`;
+  return mk(question,`${per} × ${group} ＋ ${extra} ＝ ${ans}`,
+    [`${per} × ${group} ＝ ${per*group}`,`${per} × (${group}＋1) ＝ ${per*(group+1)}`,`${per} × ${group} ＋ ${extra} ＝ ${ans+per}`]);
 }
 const CLK=["🕛","🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚"];
 const CLKH=["🕧","🕜","🕝","🕞","🕟","🕠","🕡","🕢","🕣","🕤","🕥","🕦"];
@@ -103,7 +181,7 @@ function g2frac(){const t=R(2);
   const n=pick([8,12,16]);return mk(`${n}この ４ぶんの１は なんこ？`,n/4,numWrongs(n/4));}
 /* ── 3年生：社会 ── */
 function mapSym(){const[e,w]=pick(MAPSYM);
-  return mk(`この たてものを 地図で あらわすと？`,w,shuffle(MAPSYM.filter(p=>p[1]!==w)).slice(0,3).map(p=>p[1]),e);}
+  return mk(`この 地図記号は 何を あらわしている？`,w,shuffle(MAPSYM.filter(p=>p[1]!==w)).slice(0,3).map(p=>p[1]),e);}
 function qa(pool){const it=pick(pool);return mk(it.q,it.a,it.w);}
 /* ── 3年生：算数 ── */
 function g3div(){const b=R(8)+2,c=R(8)+2,a=b*c;return mk(`${a} ÷ ${b} ＝ ？`,c,numWrongs(c));}
